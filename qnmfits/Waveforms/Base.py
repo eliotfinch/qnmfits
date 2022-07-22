@@ -1259,7 +1259,7 @@ class BaseClass:
     
     def mismatch_t0_array(self, t0_array, T_array=100, Mf=None, chif=None, 
                           modes=[(2,2,n) for n in range(8)], mirror_modes=[], 
-                          hlm_modes=[(2,2)]):
+                          hlm_modes=[(2,2)], t0_method='geq'):
         """
         Calculate the mismatch for an array of start times.
 
@@ -1296,6 +1296,32 @@ class BaseClass:
         hlm_modes : list, optional
             A list of (l,m) tuples to specify which spherical harmonic hlm 
             modes the analysis should be performed on. The default is [(2,2)].
+            
+        t0_method: str, optional
+            A requested ringdown start time will in general lie between times
+            on the default time array (the same is true for the end time of
+            the analysis). There are different approaches to deal with this, 
+            which can be specified here.
+            
+            Options are:
+                
+                - 'geq'
+                    Take data at times greater than or equal to t0. Note that
+                    we still treat the ringdown start time as occuring at t0,
+                    so the best fit coefficients are defined with respect to 
+                    t0.
+
+                - 'closest'
+                    Identify the data point occuring at a time closest to t0, 
+                    and take times from there.
+                    
+                - 'interpolated'
+                    Interpolate the data and evaluate on a new array of times,
+                    with t0 being the first time. The new time array is 
+                    uniformly spaced with separation self.min_dt (the 
+                    minimum time between samples in the original data).
+                    
+            The default is 'geq'.
 
         Returns
         -------
@@ -1314,7 +1340,8 @@ class BaseClass:
             # Run the fit
             best_fit = self.ringdown_fit(
                 t0=t0, T=T, Mf=Mf, chif=chif, modes=modes, 
-                mirror_modes=mirror_modes, hlm_modes=hlm_modes)
+                mirror_modes=mirror_modes, hlm_modes=hlm_modes, 
+                t0_method=t0_method)
 
             # Append the mismatch to the list
             mm_list.append(best_fit['mismatch'])
