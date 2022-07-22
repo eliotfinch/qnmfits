@@ -84,7 +84,8 @@ class BaseClass:
         """
         Use a spline to interpolate the strain data, ready to evaluate on a 
         chosen array of times. The dictionary of functions are stored to
-        self.h_interp.
+        self.h_interp_funcs. There is also a self.h_interp(l,m,t) function for
+        quick evaluation.
         """
         self.h_interp_funcs = {}
         
@@ -98,8 +99,9 @@ class BaseClass:
                     
         self.h_interp = lambda l, m, t: self.h_interp_funcs[l,m][0](t) \
             + 1j*self.h_interp_funcs[l,m][1](t)
+            
     
-    def uniform_times(self):
+    def make_times_uniform(self):
         """
         Interpolate h and evaluate on an array of times which are uniformly 
         spaced. The spacing is chosen to be the minimum spacing in the default
@@ -126,6 +128,45 @@ class BaseClass:
         # Overwrite times and the h dictionary
         self.times = uniform_times
         self.h = hp
+        
+        
+    def time_shift(self):
+        """
+        Shift the time array so that t=0 is defined by the requested method.
+        """
+        if type(self.zero_time) is float:
+            if self.zero_time == 0:
+                self.zero_time_method = 'Simulation default'
+            else:
+                self.zero_time_method = 'User defined'
+            
+        elif type(self.zero_time) is tuple:
+            self.zero_time_method = f'{self.zero_time} peak'
+            # Ampltude of the requested mode
+            amp = abs(self.h[self.zero_time])
+            # We choose t=0 to correspond to the peak of the mode
+            self.zero_time = self.times[np.argmax(amp)]
+            
+        elif self.zero_time == 'norm':
+            self.zero_time_method = 'Norm peak'
+            # All hlm modes up to ellMax
+            all_modes = [
+                (l,m) for l in range(2,self.ellMax+1) for m in range(-l,l+1)]
+            stacked_strain = np.vstack([self.h[lm] for lm in all_modes])
+            # Total amplitude of all the available modes
+            amp = np.sqrt(np.sum(abs(stacked_strain)**2, axis=0))
+            # We choose t=0 to correspond to the peak of this total amplitude
+            self.zero_time = self.times[np.argmax(amp)]
+            
+        elif self.zero_time == 'Edot':
+            self.zero_time_method = 'Edot peak'
+            self.zero_time = self.times[np.argmax(self.Edot)]
+            
+        elif self.zero_time == 'common_horizon':
+            self.zero_time_method = 'Common horizon'
+            self.zero_time = self.common_horizon_time
+            
+        self.times = self.times - self.zero_time
         
     
     def rotate_modes(self):
@@ -187,8 +228,6 @@ class BaseClass:
         thetaoft = np.arccos(chioft_norm[:,2])
         phioft = np.arctan2(chioft_norm[:,1], chioft_norm[:,0])
         
-        print(f'Time length = {len(chioft_norm)}')
-        
         # Get the quaternion representing the rotation needed for the basis
         Roft = quaternionic.array.from_spherical_coordinates(thetaoft, phioft)
         
@@ -213,8 +252,7 @@ class BaseClass:
         
     def calculate_hdot(self):
         '''
-        Caclulate the derivative of the strain (the time array can be the 
-        default, non-uniformly spaced array). First, interpolate h with a 
+        Caclulate the derivative of the strain. First, interpolate h with a 
         standard spline, then differentiate the spline and evaluate that 
         derivative at self.times. Results are stored to the hdot dictionary.
         '''
@@ -332,7 +370,7 @@ class BaseClass:
         self.chioft_mag = np.linalg.norm(self.chioft, axis=1)
         
         
-    def project_signal(self, theta, phi=None):
+    def project_signal(self, theta, phi):
         """
         Project the signal in the requested position on the (source frame) sky.
 
@@ -342,9 +380,8 @@ class BaseClass:
             The angle between the source-frame z-axis and the line of sight 
             (i.e. the inclination).
             
-        phi : float, optional
-            The azimuthal angle of the line of sight in the source frame. The 
-            default is None.
+        phi : float
+            The azimuthal angle of the line of sight in the source frame.
 
         Returns
         -------
@@ -354,9 +391,6 @@ class BaseClass:
         """
         # Initialize an empty, complex array
         signal = np.zeros_like(self.times, dtype=complex)
-        
-        if phi is None:
-            phi = 0 # self.phif
             
         # Get the quaternion representing the rotation needed
         R = quaternionic.array.from_spherical_coordinates(theta, phi)
@@ -371,76 +405,6 @@ class BaseClass:
                 signal += self.h[l,m] * Y[self.wigner.Yindex(l,m)]
                 
         return signal
-                
-                
-    # def project_twisted_signal(self):
-    #     """
-    #     Project the signal along the changing direction of the total angular 
-    #     momentum vector (equivalent to the direction of chi(t)).
-    #     """
-    #     # Initialize an empty, complex array
-    #     self.twisted_signal = np.zeros_like(self.times, dtype=complex)
-        
-    #     # Reshape chioft magnitudes to make division possible
-    #     chioft_mag = self.chioft_mag.reshape(len(self.chioft_mag),1)
-        
-    #     # Angular coordinates of the spin vector
-    #     chioft_norm = self.chioft/chioft_mag
-    #     thetaoft = np.arccos(chioft_norm[:,2])
-    #     phioft = np.arctan2(chioft_norm[:,1], chioft_norm[:,0])
-        
-    #     if self.hlm_prime:
-    #         # If the hlm modes have been rotated, we need to be careful with
-    #         # the argument of the sYlm. Will subtracting thetaf and phif fix
-    #         # this?
-    #         thetaoft -= self.thetaf
-    #         phioft -= self.phif
-
-    #     # Compute the projected signal. This is done by summing each of the
-    #     # modes, weighted by the spherical harmonics (now for each time step).
-    #     for i in range(len(self.times)):
-    #         for l in range(2, self.ellMax+1):
-    #             for m in range(-l, l+1):
-    #                 self.twisted_signal[i] += \
-    #                     self.h[l,m][i] * sYlm(-2, l, m, thetaoft[i], phioft[i])
-                        
-    def time_shift(self):
-        """
-        Shift the time array so that t=0 is defined by the requested method.
-        """
-        if type(self.zero_time) is float:
-            if self.zero_time == 0:
-                self.zero_time_method = 'Simulation default'
-            else:
-                self.zero_time_method = 'User defined'
-            
-        elif type(self.zero_time) is tuple:
-            self.zero_time_method = f'{self.zero_time} peak'
-            # Ampltude of the requested mode
-            amp = abs(self.h[self.zero_time])
-            # We choose t=0 to correspond to the peak of the mode
-            self.zero_time = self.times[np.argmax(amp)]
-            
-        elif self.zero_time == 'norm':
-            self.zero_time_method = 'Norm peak'
-            # All hlm modes up to ellMax
-            all_modes = [
-                (l,m) for l in range(2,self.ellMax+1) for m in range(-l,l+1)]
-            stacked_strain = np.vstack([self.h[lm] for lm in all_modes])
-            # Total amplitude of all the available modes
-            amp = np.sqrt(np.sum(abs(stacked_strain)**2, axis=0))
-            # We choose t=0 to correspond to the peak of this total amplitude
-            self.zero_time = self.times[np.argmax(amp)]
-            
-        elif self.zero_time == 'Edot':
-            self.zero_time_method = 'Edot peak'
-            self.zero_time = self.times[np.argmax(self.Edot)]
-            
-        elif self.zero_time == 'common_horizon':
-            self.zero_time_method = 'Common horizon'
-            self.zero_time = self.common_horizon_time
-            
-        self.times = self.times - self.zero_time
                         
                         
     def calculate_foft(self, method='phase_derivative'):
@@ -1059,8 +1023,8 @@ class BaseClass:
         Parameters
         ----------
         hlm_mode : tuple, optional
-            A (l,m) tuple to specify which spherical harmonic mode to plot. If 
-            'signal', the extracted signal is plotted. The default is (2,2).
+            A (l,m) tuple to specify which spherical harmonic mode to plot. 
+            The default is (2,2).
         
         xlim : tuple, optional
             The x-axis limits. The default is [-50,100].
@@ -1079,10 +1043,7 @@ class BaseClass:
             figure creation.
         """
         # Use the appropriate data
-        if hlm_mode != 'signal':
-            data = self.h[hlm_mode]
-        else:
-            data = self.signal
+        data = self.h[hlm_mode]
             
         fig, ax = plt.subplots(figsize=(8,4), **fig_kw)
         
@@ -1100,11 +1061,7 @@ class BaseClass:
 
         ax.set_xlim(xlim[0],xlim[1])
         ax.set_xlabel(f'$t\ [M]$ [{self.zero_time_method}]')
-        
-        if hlm_mode != 'signal':
-            ax.set_ylabel(f'$h_{{{hlm_mode[0]}{hlm_mode[1]}}}$')
-        else:
-            ax.set_ylabel('$h$')
+        ax.set_ylabel(f'$h_{{{hlm_mode[0]}{hlm_mode[1]}}}$')
 
         ax.legend(loc='upper right', frameon=False)
         
