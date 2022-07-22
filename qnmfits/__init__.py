@@ -1,5 +1,5 @@
-from .Waveforms import Custom
-from .Waveforms import Simulation
-from .Waveforms import Surrogate
+from .Waveforms.Custom import Custom
+from .Waveforms.Simulation import Simulation
+from .Waveforms.Surrogate import NRSur7dq4, NRHybSur3dq8
 
 from .qnm import qnm
