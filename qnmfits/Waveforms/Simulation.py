@@ -200,14 +200,14 @@ class Simulation(BaseClass):
         # Derived properties
         # ------------------
         
-        # Calculate centre of mass at reference time (useful to check if chi_p
+        # Calculate centre of mass at reference time (useful to check if chip
         # calculation is valid)
         self.com = self.m1*self.r1 + self.m2*self.r2
          
         # Mass ratio
         self.q = self.m1/self.m2
         
-        # A1 and A2 (used in chi_p calculation)
+        # A1 and A2 (used in chip calculation)
         A1 = 2 + 3/(2*self.q)
         A2 = 2 + (3/2)*self.q
         
