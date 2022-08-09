@@ -571,9 +571,8 @@ class BaseClass:
                     The (shared) best-fit complex amplitudes. There is a 
                     complex amplitude for each ringdown mode.
                 - 'weighted_C' : dict
-                    The complex amplitudes weighted by the mixing coefficients 
-                    and remnant mass. There is a dictionary entry for each hlm
-                    mode.
+                    The complex amplitudes weighted by the mixing coefficients. 
+                    There is a dictionary entry for each hlm mode.
                 - 'data' : dict
                     The (masked) data used in the fit.
                 - 'model': dict
@@ -600,6 +599,7 @@ class BaseClass:
         if chif is None:
             chif = self.chif_mag
         
+        # Mask the data with the requested method
         if t0_method == 'geq':
             
             data_mask = (self.times>=t0) & (self.times<t0+T)
@@ -681,14 +681,11 @@ class BaseClass:
         mu_lists = [
             list(reg_mu_lists[i]) + list(mirror_mu_lists[i]) 
             for i in range(len(hlm_modes))]
-        
-        # for i, hlm_mode in enumerate(hlm_modes):
-        #     mu_lists.append(list(reg_mu_lists[i]) + list(mirror_mu_lists[i]))
             
         # Construct coefficient matrix and solve
         # --------------------------------------
         
-        # Construct the coefficient matrix # (Mf/self.M)*
+        # Construct the coefficient matrix
         a = np.concatenate([np.array([
             mu_lists[i][j]*np.exp(-1j*all_frequencies[j]*(times-t0)) 
             for j in range(len(all_frequencies))]).T 
