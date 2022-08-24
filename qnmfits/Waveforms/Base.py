@@ -9,7 +9,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline as spline
 from tqdm import tqdm
 
 # Mismatch functions
-from ..utils import sky_averaged_mismatch
+from ..utils import mismatch, sky_averaged_mismatch
 
 # Class to load QNM frequencies and mixing coefficients
 from ..qnm import qnm
@@ -490,7 +490,93 @@ class BaseClass:
                     self.foft[l,m]['plus'] = np.transpose([plus_foft_times, plus_foft])
                     self.foft[l,m]['cross'] = np.transpose([cross_foft_times, cross_foft])
     
-    
+
+    def single_ringdown_fit(self, times, data, modes, mirror_modes=[], t0=0, 
+                            t0_method='geq', T=100, Mf=None, chif=None):
+        
+        # If no mass or spin are given, use the true values:
+        if Mf is None:
+            Mf = self.Mf
+        
+        if chif is None:
+            chif = self.chif_mag
+        
+        # Mask the data with the requested method
+        if t0_method == 'geq':
+            
+            data_mask = (times>=t0) & (times<t0+T)
+            
+            times = times[data_mask]
+            data = data[data_mask]
+            
+        elif t0_method == 'closest':
+            
+            start_index = np.argmin((times-t0)**2)
+            end_index = np.argmin((times-t0-T)**2)
+            
+            times = self.times[start_index:end_index]
+            data = data[start_index:end_index]
+            
+        else:
+            print("""Requested t0_method is not valid. Please choose between
+                  'geq' and 'closest'""")
+        
+        # Frequencies
+        # -----------
+        
+        # The regular (positive real part) frequencies
+        frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
+        
+        # The mirror (negative real part) frequencies can be obtained using 
+        # symmetry properties 
+        mirror_frequencies = -np.conjugate(qnm.omega_list(
+            [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
+        
+        all_frequencies = np.hstack((frequencies, mirror_frequencies))
+            
+        # Construct coefficient matrix and solve
+        # --------------------------------------
+        
+        # Construct the coefficient matrix
+        a = np.array([
+            np.exp(-1j*all_frequencies[i]*(times-t0)) 
+            for i in range(len(all_frequencies))])
+
+        # Solve for the complex amplitudes, C. Also returns the sum of
+        # residuals, the rank of a, and singular values of a.
+        C, res, rank, s = np.linalg.lstsq(a, data, rcond=None)
+        
+        # Evaluate the model
+        model = np.einsum('ij,j->i', a, C)
+        
+        # Calculate the (sky averaged) mismatch for the fit
+        mm = mismatch(times, model, data)
+        
+        # Create a list of mode labels (can be used for plotting)
+        labels = []
+        for mode in modes:
+            labels.append(str(mode))
+        for mode in mirror_modes:
+            labels.append(str(mode) + '$^\prime$')
+        
+        # Store all useful information to a output dictionary
+        best_fit = {
+            'residual': res,
+            'mismatch': mm,
+            'C': C,
+            'data': data,
+            'model': model,
+            'model_times': times,
+            't0': t0,
+            'modes': modes,
+            'mirror_modes': mirror_modes,
+            'mode_labels': labels,
+            'frequencies': all_frequencies
+            }
+        
+        # Return the output dictionary
+        return best_fit
+        
     def ringdown_fit(self, t0=0, T=100, Mf=None, chif=None,
                      modes=[(2,2,n) for n in range(8)], mirror_modes=[], 
                      hlm_modes=[(2,2)], t0_method='geq'):
