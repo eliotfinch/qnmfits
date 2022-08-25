@@ -159,7 +159,25 @@ class qnm:
         """
         # For each mode, call the qnm function and append the result to the
         # list
-        return [self.omega(l, m, n, chif, Mf, interp) for l, m, n in modes]
+        
+        # Code for linear QNMs:
+        # return [self.omega(l, m, n, chif, Mf, interp) for l, m, n in modes]
+        
+        # Code for nonlinear QNMs:
+        return [
+            sum([self.omega(l, m, n, chif, Mf, interp) 
+                 for l, m, n in [mode[i:i+3] for i in range(0, len(mode), 3)]]) 
+            for mode in modes
+            ]
+    
+        # Writen out, the above is doing the following:
+        # return_list = []
+        # for mode in modes:
+        #     sum_list = []
+        #     for i in range(0, len(mode), 3):
+        #         l, m, n = mode[i:i+3]
+        #         sum_list.append(self.omega(l, m, n, chif, Mf, interp))
+        #     return_list.append(sum(sum_list))
     
     
     def omegaoft(self, l, m, n, chioft, Moft=1, interp=True):

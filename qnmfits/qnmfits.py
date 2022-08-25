@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Class to load QNM frequencies and mixing coefficients
-from qnm import qnm
+from .qnm import qnm
 qnm = qnm()
 
 def ringdown(time, start_time, complex_amplitudes, frequencies):
@@ -132,7 +132,36 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
 
 def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[], 
                  t0_method='geq', T=100):
-    
+    """
+    Perform a least-squares fit to some data using a ringdown model.
+
+    Parameters
+    ----------
+    times : TYPE
+        DESCRIPTION.
+    data : TYPE
+        DESCRIPTION.
+    modes : TYPE
+        DESCRIPTION.
+    Mf : TYPE
+        DESCRIPTION.
+    chif : TYPE
+        DESCRIPTION.
+    t0 : TYPE
+        DESCRIPTION.
+    mirror_modes : TYPE, optional
+        DESCRIPTION. The default is [].
+    t0_method : TYPE, optional
+        DESCRIPTION. The default is 'geq'.
+    T : TYPE, optional
+        DESCRIPTION. The default is 100.
+
+    Returns
+    -------
+    best_fit : TYPE
+        DESCRIPTION.
+
+    """
     # Mask the data with the requested method
     if t0_method == 'geq':
         
@@ -150,8 +179,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         data = data[start_index:end_index]
         
     else:
-        print("""Requested t0_method is not valid. Please choose between
-              'geq' and 'closest'""")
+        print("""Requested t0_method is not valid. Please choose between 'geq'
+              and 'closest'""")
     
     # Frequencies
     # -----------
@@ -172,7 +201,7 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     # Construct the coefficient matrix
     a = np.array([
         np.exp(-1j*frequencies[i]*(times-t0)) for i in range(len(frequencies))
-        ])
+        ]).T
 
     # Solve for the complex amplitudes, C. Also returns the sum of residuals,
     # the rank of a, and singular values of a.
@@ -208,6 +237,7 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     
     # Return the output dictionary
     return best_fit
+
     
 def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
                            mirror_modes=[], t0_method='geq', T=100, 
