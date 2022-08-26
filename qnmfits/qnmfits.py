@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from tqdm import tqdm
+
 # Class to load QNM frequencies and mixing coefficients
 from .qnm import qnm
 qnm = qnm()
+
 
 def ringdown(time, start_time, complex_amplitudes, frequencies):
     r"""
@@ -26,22 +29,22 @@ def ringdown(time, start_time, complex_amplitudes, frequencies):
 
     Parameters
     ----------
-    time : array
+    time : array_like
         The times at which the model is evalulated.
         
     start_time : float
         The time at which the model begins. Should lie within the times array.
         
-    complex_amplitudes : list
-        A list of complex amplitudes.
+    complex_amplitudes : array_like
+        The complex amplitudes of the modes.
         
-    frequencies : list
+    frequencies : array_like
         The complex frequencies of the modes. These should be ordered in the
         same order as the amplitudes.
 
     Returns
     -------
-    h : array
+    h : ndarray
         The plus and cross components of the ringdown waveform, expressed as a
         complex number.
     """
@@ -69,10 +72,10 @@ def mismatch(times, wf_1, wf_2):
 
     Parameters
     ----------
-    times : array
+    times : array_like
         The times at which the waveforms are evaluated.
         
-    wf_1, wf_2 : array
+    wf_1, wf_2 : array_like
         The two waveforms to calculate the mismatch between.
         
     RETURNS
@@ -91,15 +94,15 @@ def mismatch(times, wf_1, wf_2):
 def multimode_mismatch(times, wf_dict_1, wf_dict_2):
     """
     Calculates the multimode (sky-averaged) mismatch between two dictionaries 
-    of spherical harmonic waveform modes. 
+    of spherical-harmonic waveform modes. 
     
     If the two dictionaries have a different set of keys, the sum is performed
     over the keys of wf_dict_1 (this may be the case, for example, if only a 
-    subset of spherical harmonic modes are modelled).
+    subset of spherical-harmonic modes are modelled).
 
     Parameters
     ----------
-    times : array
+    times : array_like
         The times at which the waveforms are evaluated.
         
     wf_dict_1, wf_dict_2 : dict
@@ -137,30 +140,83 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
 
     Parameters
     ----------
-    times : TYPE
-        DESCRIPTION.
-    data : TYPE
-        DESCRIPTION.
-    modes : TYPE
-        DESCRIPTION.
-    Mf : TYPE
-        DESCRIPTION.
-    chif : TYPE
-        DESCRIPTION.
-    t0 : TYPE
-        DESCRIPTION.
-    mirror_modes : TYPE, optional
-        DESCRIPTION. The default is [].
-    t0_method : TYPE, optional
-        DESCRIPTION. The default is 'geq'.
-    T : TYPE, optional
-        DESCRIPTION. The default is 100.
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data : array_like
+        The data to be fitted by the ringdown model.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        
+    Mf : float
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
+        
+    chif : float
+        The magnitude of the remnant black hole spin.
+        
+    t0 : float
+        The start time of the ringdown model.
+        
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
+        
+    T : float, optional
+        The end time of the analysis, relative to t0. The default is 100.
 
     Returns
     -------
-    best_fit : TYPE
-        DESCRIPTION.
-
+    best_fit : dict
+        A dictionary of useful information related to the fit. Keys include:
+            
+            - 'residual' : float
+                The residual from the fit.
+            - 'mismatch' : float
+                The mismatch between the best-fit waveform and the data.
+            - 'C' : ndarray
+                The best-fit complex amplitudes. There is a complex amplitude 
+                for each ringdown mode.
+            - 'data' : ndarray
+                The (masked) data used in the fit.
+            - 'model': ndarray
+                The best-fit model waveform.
+            - 'model_times' : ndarray
+                The times at which the model is evaluated.
+            - 't0' : float
+                The ringdown start time used in the fit.
+            - 'modes' : ndarray
+                The regular ringdown modes used in the fit.
+            - 'mirror_modes' : ndarray
+                The mirror ringdown modes used in the fit.
+            - 'mode_labels' : list
+                Labels for each of the ringdown modes (used for plotting).
+            - 'frequencies' : ndarray
+                The values of the complex frequencies for all the ringdown 
+                modes. The order is [modes, mirror_modes].
     """
     # Mask the data with the requested method
     if t0_method == 'geq':
@@ -241,49 +297,45 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     
 def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
                            mirror_modes=[], t0_method='geq', T=100, 
-                           hlm_modes=None):
+                           spherical_modes=None):
     """
-    Perform a least squares fit to the simulation data using a ringdown 
-    model.
+    Perform a least-squares ringdown fit to data which has been decomposed 
+    into spherical-harmonic modes.
 
     Parameters
     ----------
-    t0 : float, optional
-        The start time of the ringdown model, relative to the chosen zero
-        time. The default is 0.
+    times : array_like
+        The times associated with the data to be fitted.
         
-    T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+    data_dict : dict
+        The data (decomposed into spherical-harmonic modes) to be fitted by 
+        the ringdown model. This should have keys (l,m) and array_like data of
+        length times.
         
-    Mf : float, optional
-        The remnant black hole mass, which along with chif determines the 
-        QNM frequencies. If None, the true remnant mass is used. The 
-        default is None.
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
         
-    chif : float, optional
-        The magnitude of the remnant black hole spin. If None, the true
-        remnant spin is used. The default is None.
+    Mf : float
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
         
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,n) for n in range(8)].
+    chif : float
+        The magnitude of the remnant black hole spin.
         
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
+    t0 : float
+        The start time of the ringdown model.
         
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
         
-    t0_method: str, optional
-        A requested ringdown start time will in general lie between times
-        on the default time array (the same is true for the end time of
-        the analysis). There are different approaches to deal with this, 
-        which can be specified here.
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
         
         Options are:
             
@@ -297,52 +349,53 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
                 Identify the data point occuring at a time closest to t0, 
                 and take times from there.
                 
-            - 'interpolated'
-                Interpolate the data and evaluate on a new array of times,
-                with t0 being the first time. The new time array is 
-                uniformly spaced with separation self.min_dt (the 
-                minimum time between samples in the original data).
-                
         The default is 'geq'.
+        
+    T : float, optional
+        The end time of the analysis, relative to t0. The default is 100.
+        
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes 
+        the analysis should be performed on. If None, all the modes contained 
+        in data_dict are used. The default is None.
 
     Returns
     -------
     best_fit : dict
-        A dictionary of useful information related to the fit. Keys 
-        include:
+        A dictionary of useful information related to the fit. Keys include:
             
             - 'residual' : float
                 The residual from the fit.
             - 'mismatch' : float
                 The mismatch between the best-fit waveform and the data.
-            - 'C' : array
-                The (shared) best-fit complex amplitudes. There is a 
-                complex amplitude for each ringdown mode.
+            - 'C' : ndarray
+                The (shared) best-fit complex amplitudes. There is a complex
+                amplitude for each ringdown mode.
             - 'weighted_C' : dict
                 The complex amplitudes weighted by the mixing coefficients. 
-                There is a dictionary entry for each hlm mode.
+                There is a dictionary entry for each spherical mode.
             - 'data' : dict
                 The (masked) data used in the fit.
             - 'model': dict
-                The best-fit model waveform. Keys correspond to the hlm
+                The best-fit model waveform. Keys correspond to the spherical
                 modes.
-            - 'model_times' : array
+            - 'model_times' : ndarray
                 The times at which the model is evaluated.
             - 't0' : float
                 The ringdown start time used in the fit.
-            - 'modes' : list
+            - 'modes' : ndarray
                 The regular ringdown modes used in the fit.
-            - 'mirror_modes' : list
+            - 'mirror_modes' : ndarray
                 The mirror ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
-            - 'frequencies' : array
+            - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
                 modes. The order is [modes, mirror_modes].
     """
     # Use the requested spherical modes
-    if hlm_modes is None:
-        hlm_modes = list(data_dict.keys())
+    if spherical_modes is None:
+        spherical_modes = list(data_dict.keys())
     
     # Mask the data with the requested method
     if t0_method == 'geq':
@@ -351,8 +404,8 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         times = times[data_mask]
         data = np.concatenate(
-            [data_dict[lm][data_mask] for lm in hlm_modes])
-        data_dict_mask = {lm: data_dict[lm][data_mask] for lm in hlm_modes}
+            [data_dict[lm][data_mask] for lm in spherical_modes])
+        data_dict_mask = {lm: data_dict[lm][data_mask] for lm in spherical_modes}
         
     elif t0_method == 'closest':
         
@@ -361,9 +414,9 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         times = times[start_index:end_index]
         data = np.concatenate(
-            [data_dict[lm][start_index:end_index] for lm in hlm_modes])
+            [data_dict[lm][start_index:end_index] for lm in spherical_modes])
         data_dict_mask = {
-            lm: data_dict[lm][start_index:end_index] for lm in hlm_modes}
+            lm: data_dict[lm][start_index:end_index] for lm in spherical_modes}
         
     else:
         print("""Requested t0_method is not valid. Please choose between
@@ -397,7 +450,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
     #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
     reg_indices_lists = [
-        [hlm_mode+mode for mode in modes] for hlm_mode in hlm_modes]
+        [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
     
     # Convert each tuple of indices in indices_lists to a mu value
     reg_mu_lists = np.conjugate([
@@ -408,7 +461,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
     # A list of lists for the mixing coefficient indices, see above
     mirror_indices_lists = [
-        [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in hlm_modes]
+        [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in spherical_modes]
     
     # We need to multiply each mu by a factor (-1)**(l+l'). Construct these
     # factors from the indices_lists.
@@ -424,7 +477,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # Combine the regular and mirror mixing coefficients
     mu_lists = [
         list(reg_mu_lists[i]) + list(mirror_mu_lists[i]) 
-        for i in range(len(hlm_modes))]
+        for i in range(len(spherical_modes))]
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -433,7 +486,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     a = np.concatenate([np.array([
         mu_lists[i][j]*np.exp(-1j*frequencies[j]*(times-t0)) 
         for j in range(len(frequencies))]).T 
-        for i in range(len(hlm_modes))])
+        for i in range(len(spherical_modes))])
 
     # Solve for the complex amplitudes, C. Also returns the sum of
     # residuals, the rank of a, and singular values of a.
@@ -449,7 +502,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     model_dict = {}
     weighted_C = {}
     
-    for i, lm in enumerate(hlm_modes):
+    for i, lm in enumerate(spherical_modes):
         model_dict[lm] = model[i*len(times):(i+1)*len(times)]
         weighted_C[lm] = np.array(mu_lists[i])*C
     
@@ -485,86 +538,108 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
 
 def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
                                    mirror_modes=[], t0_method='geq', T=100, 
-                                   hlm_modes=None):
+                                   spherical_modes=None):
     """
-    Perform a least squares fit to the simulation data using a dynamic
-    ringdown model.
+    Perform a least-squares ringdown fit to data which has been decomposed 
+    into spherical-harmonic modes. The remnant mass and spin can be arrays of
+    length time, which allows the Kerr spectrum to change with time.
 
     Parameters
     ----------
-    t0 : float, optional
-        The start time of the ringdown model, relative to the chosen zero
-        time. The default is 0.
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data_dict : dict
+        The data (decomposed into spherical-harmonic modes) to be fitted by 
+        the ringdown model. This should have keys (l,m) and array_like data of
+        length times.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        
+    Mf : float or array_like
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies. This can be a float, so that mass doesn't change with
+        time, or an array of the same length as times.
+        
+    chif : float or array_like
+        The magnitude of the remnant black hole spin. As with Mf, this can be
+        a float or an array.
+        
+    t0 : float
+        The start time of the ringdown model.
+        
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
         
     T : float, optional
         The end time of the analysis, relative to t0. The default is 100.
         
-    Moft : float or array, optional
-        The remnant black hole mass, which along with chif determines the 
-        QNM frequencies. This can be a float, so that mass doesn't change
-        with time, or an array of the same length as self.time. If None, 
-        the integrated black hole mass is used (stored as self.Moft). The 
-        default is None.
-        
-    chioft : float or array, optional
-        The magnitude of the remnant black hole spin. As with Moft, this 
-        can be a float or an array. If None, the integrated black hole 
-        spin is used (stored as self.chioft_mag). The default is None.
-        
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,n) for n in range(8)].
-        
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
-        
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes 
+        the analysis should be performed on. If None, all the modes contained 
+        in data_dict are used. The default is None.
 
     Returns
     -------
     best_fit : dict
-        A dictionary of useful information related to the fit. Keys 
-        include:
+        A dictionary of useful information related to the fit. Keys include:
             
             - 'residual' : float
                 The residual from the fit.
             - 'mismatch' : float
                 The mismatch between the best-fit waveform and the data.
-            - 'C' : array
-                The (shared) best-fit complex amplitudes. There is a 
-                (time dependant) complex amplitude for each ringdown mode.
+            - 'C' : ndarray
+                The (shared) best-fit complex amplitudes. There is a (time 
+                dependant) complex amplitude for each ringdown mode.
             - 'weighted_C' : dict
-                The complex amplitudes weighted by the mixing coefficients 
-                and remnant mass. There is a dictionary entry for each hlm
-                mode.
+                The complex amplitudes weighted by the mixing coefficients. 
+                There is a dictionary entry for each spherical mode.
             - 'data' : dict
                 The (masked) data used in the fit.
             - 'model': dict
-                The best-fit model waveform. Keys correspond to the hlm
+                The best-fit model waveform. Keys correspond to the spherical
                 modes.
-            - 'model_times' : array
+            - 'model_times' : ndarray
                 The times at which the model is evaluated.
             - 't0' : float
                 The ringdown start time used in the fit.
-            - 'modes' : list
+            - 'modes' : ndarray
                 The regular ringdown modes used in the fit.
-            - 'mirror_modes' : list
+            - 'mirror_modes' : ndarray
                 The mirror ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
-            - 'frequencies' : array
+            - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
                 modes. The order is [modes, mirror_modes].
     """
     # Use the requested spherical modes
-    if hlm_modes is None:
-        hlm_modes = list(data_dict.keys())
+    if spherical_modes is None:
+        spherical_modes = list(data_dict.keys())
     
     # Mask the data with the requested method
     if t0_method == 'geq':
@@ -573,8 +648,8 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         times = times[data_mask]
         data = np.concatenate(
-            [data_dict[lm][data_mask] for lm in hlm_modes])
-        data_dict_mask = {lm: data_dict[lm][data_mask] for lm in hlm_modes}
+            [data_dict[lm][data_mask] for lm in spherical_modes])
+        data_dict_mask = {lm: data_dict[lm][data_mask] for lm in spherical_modes}
         
     elif t0_method == 'closest':
         
@@ -583,9 +658,9 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         times = times[start_index:end_index]
         data = np.concatenate(
-            [data_dict[lm][start_index:end_index] for lm in hlm_modes])
+            [data_dict[lm][start_index:end_index] for lm in spherical_modes])
         data_dict_mask = {
-            lm: data_dict[lm][start_index:end_index] for lm in hlm_modes}
+            lm: data_dict[lm][start_index:end_index] for lm in spherical_modes}
         
     else:
         print("""Requested t0_method is not valid. Please choose between
@@ -618,8 +693,8 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         frequencies = np.hstack((reg_frequencies.T, mirror_frequencies.T))
     
     # We stack as many frequency arrays on top of each other as we have
-    # hlm_modes
-    frequencies = np.vstack(len(hlm_modes)*[frequencies])
+    # spherical_modes
+    frequencies = np.vstack(len(spherical_modes)*[frequencies])
         
     # Construct the coefficient matrix for use with NumPy's lstsq function. We 
     # deal with the regular mode and mirror mode mixing coefficients separately.
@@ -635,14 +710,14 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
         #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
         reg_indices_lists = [
-            [hlm_mode+mode for mode in modes] for hlm_mode in hlm_modes]
+            [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
         
         # Convert each tuple of indices in indices_lists to an array of mu 
         # values
         reg_mu_lists = np.conjugate([
             qnm.muoft_list(indices, chif) for indices in reg_indices_lists])
         
-        # I = len(hlm_modes)
+        # I = len(spherical_modes)
         # J = len(modes) + len(mirror_modes)
         # K = len(times)
         
@@ -661,7 +736,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         # Reshape
         reg_mu_lists = np.vstack([
             reg_mu_lists[:,i*len(modes):(i+1)*len(modes)] 
-            for i in range(len(hlm_modes))])
+            for i in range(len(spherical_modes))])
         
         # The above reshaping converts the shape into the desired (I*K, J)
         
@@ -672,7 +747,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
             
         # A list of lists for the mixing coefficient indices, see above
         mirror_indices_lists = [
-            [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in hlm_modes]
+            [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in spherical_modes]
         
         # We need to multiply each mu by a factor (-1)**(l+l'). Construct these
         # factors from the indices_lists.
@@ -692,7 +767,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         # Reshape
         mirror_mu_lists = np.vstack([
             mirror_mu_lists[:,i*len(mirror_modes):(i+1)*len(mirror_modes)] 
-            for i in range(len(hlm_modes))])
+            for i in range(len(spherical_modes))])
     
     if len(mirror_modes) == 0:
         mu_lists = reg_mu_lists
@@ -703,7 +778,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         mu_lists = np.hstack((reg_mu_lists, mirror_mu_lists))
     
     # Construct the coefficient matrix
-    stacked_times = np.vstack(len(hlm_modes)*[times[:,None]])
+    stacked_times = np.vstack(len(spherical_modes)*[times[:,None]])
     a = mu_lists*np.exp(-1j*frequencies*(stacked_times-t0))
 
     # Solve for the complex amplitudes, C. Also returns the sum of
@@ -725,7 +800,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     model_dict = {}
     weighted_C_dict = {}
     
-    for i, lm in enumerate(hlm_modes):
+    for i, lm in enumerate(spherical_modes):
         model_dict[lm] = model[i*len(times):(i+1)*len(times)]
         weighted_C_dict[lm] = weighted_C[i*len(times):(i+1)*len(times)]
     
@@ -759,39 +834,48 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     return best_fit
 
 
-def plot_ringdown(times, data, xlim=[-50,100], best_fit=None, hlm_mode=None,
-                  outfile=None, fig_kw={}):
+def plot_ringdown(times, data, xlim=[-50,100], best_fit=None, 
+                  spherical_mode=None, outfile=None, fig_kw={}):
     """
-    Plot the NR data, with an option to plot a best fit model on top.
+    Plot some data, with an option to plot a best fit model on top.
 
     Parameters
     ----------
-    hlm_mode : tuple, optional
-        A (l,m) tuple to specify which spherical harmonic mode to plot. 
-        The default is (2,2).
-    
-    xlim : tuple, optional
+    times : array_like
+        The times associated with the data to be plotted.
+        
+    data : array_like or dict
+        The data to be plotted. If a dict of spherical-harmonic modes, use the 
+        spherical_mode argument to specify which mode to plot.
+        
+    xlim : array_like, optional
         The x-axis limits. The default is [-50,100].
         
-    bestfit : dict, optional
-        A bestfit result dictionary from a call of ringdown_fit() or
-        dynamic_ringdown_fit(). The 'model' and 'model_times' dictioanary
-        entries are accessed to plot the model that matches hlm_mode. If 
-        None, no model is plotted. The default is None.
+    best_fit : dict, optional
+        A best fit result dictionary containing the model to plot on top of
+        the data. The 'model_times' and 'model' entries are accessed. If the
+        model is a dictionary of spherical-harmonic modes, use the 
+        spherical_mode argument to specify which mode to plot. If None, no 
+        bestfit model is plotted. The default is None.
+        
+    spherical_mode : tuple, optional
+        A (l,m) tuple to specify which spherical harmonic mode to plot. The 
+        default is None.
         
     outfile : str, optional
-        File name/ path to save the figure. The default is None.
+        File name/path to save the figure. If None, the figure is not saved. 
+        The default is None.
         
     fig_kw : dict, optional
-        Additional keyword arguments to pass to plt.subplots() at the 
-        figure creation.
+        Additional keyword arguments to pass to plt.subplots() at the figure
+        creation. The default is {}.
     """
     if type(data) == dict:
-        if hlm_mode is None:
+        if spherical_mode is None:
             print("""Please specify the spherical mode to plot with the 
-                  hlm_mode argument.""")
+                  spherical_mode argument.""")
         else:
-            data = data[hlm_mode]
+            data = data[spherical_mode]
     
     fig, ax = plt.subplots(figsize=(8,4), **fig_kw)
     
@@ -800,21 +884,31 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None, hlm_mode=None,
 
     if best_fit is not None:
         
-        if hlm_mode is None:
-            print("""Please specify the best fit spherical mode to plot with 
-                  the hlm_mode argument.""")
+        if type(best_fit['model'] == dict):
+        
+            if spherical_mode is None:
+                print("""Please specify the best fit spherical mode to plot 
+                      with the spherical_mode argument.""")
+            
+            else:
+                model_data = best_fit['model'][spherical_mode]
                   
         else:
-            ax.plot(
-                best_fit['model_times'], np.real(best_fit['model'][hlm_mode]), 
-                'r-', label=r'$h_+$ model', alpha=0.8)
-            # ax.plot(
-            #     best_fit['model_times'], -np.imag(best_fit['model'][hlm_mode]), 
-            #     'r--', label=r'$h_\times$ model', alpha=0.8)
+            model_data = best_fit['model']
+            
+        ax.plot(
+            best_fit['model_times'], np.real(model_data), 'r-', 
+            label=r'$h_+$ model', alpha=0.8)
+        # ax.plot(
+        #     best_fit['model_times'], -np.imag(model_data), 'r--',
+        #     label=r'$h_\times$ model', alpha=0.8)
 
     ax.set_xlim(xlim[0],xlim[1])
     ax.set_xlabel('$t\ [M]$')
-    ax.set_ylabel(f'$h_{{{hlm_mode[0]}{hlm_mode[1]}}}$')
+    if spherical_mode is None:
+        ax.set_ylabel('$h$')
+    else:
+        ax.set_ylabel(f'$h_{{{spherical_mode[0]}{spherical_mode[1]}}}$')
 
     ax.legend(loc='upper right', frameon=False)
     
@@ -823,51 +917,65 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None, hlm_mode=None,
         plt.close()
         
         
-def plot_ringdown_modes(self, best_fit, hlm_mode=(2,2), xlim=None, 
+def plot_ringdown_modes(self, best_fit, spherical_mode=None, xlim=None, 
                         ylim=None, legend=True, outfile=None, fig_kw={}):
     """
-    Plot the ringdown waveform from a least squares fit, decomposed into 
-    its individual modes.
+    Plot the ringdown waveform from a least-squares fit, decomposed into its
+    individual modes.
 
     Parameters
     ----------
     bestfit : dict
-        A bestfit result dictionary from a call of ringdown_fit() or
-        dynamic_ringdown_fit(). 
+        A best fit result dictionary containing the model to plot. If the
+        model is a dictionary of spherical-harmonic modes, use the 
+        spherical_mode argument to specify which mode to plot. 
     
-    hlm_mode : tuple, optional
-        A (l,m) tuple to specify which spherical harmonic mode to plot. 
-        The default is (2,2).
+    spherical_mode : tuple, optional
+        A (l,m) tuple to specify which spherical harmonic mode to plot. The 
+        default is None.
         
-    xlim : tuple, optional
+    xlim : array_like, optional
         The x-axis limits. The default is None.
         
-    ylim : tuple, optional
+    ylim : array_like, optional
         The y-axis limits. The default is None.
         
     legend : bool, optional
         Toggle the legend on or off. The default is True (legend on).
         
     outfile : str, optional
-        File name to save the figure. If None, the figure is not saved. 
+        File name/path to save the figure. If None, the figure is not saved. 
         The default is None.
         
     fig_kw : dict, optional
-        Additional keyword arguments to pass to plt.subplots() at the 
-        figure creation.
+        Additional keyword arguments to pass to plt.subplots() at the figure
+        creation. The default is {}.
     """
     fig, ax = plt.subplots(figsize=(8,4), **fig_kw)
     
-    # We sum the modes manually as a check
-    mode_sum = np.zeros_like(best_fit['model'][hlm_mode])
+    # Initialize an array to manually sum the modes on as a check, and get the 
+    # relevent complex amplitudes
+    if type(best_fit['model'] == dict):
+        if spherical_mode is None:
+            print("""Please specify the spherical mode to plot with the 
+                  spherical_mode argument.""")
+        else:
+            mode_sum = np.zeros_like(best_fit['model'][spherical_mode])
+            complex_amplitudes = best_fit['weighted_C'][spherical_mode]
     
-    for i, mode in enumerate(best_fit['modes'] + best_fit['mirror_modes']):
+    else:
+        mode_sum = np.zeros_like(best_fit['model'])
+        complex_amplitudes = best_fit['C']
+    
+    for i in range(len(best_fit['modes'] + best_fit['mirror_modes'])):
         
         # The waveform for each mode
         mode_waveform = ringdown(
-            best_fit['model_times'], best_fit['t0'], 
-            [best_fit['weighted_C'][hlm_mode][i]], 
-            [best_fit['frequencies'][i]])
+            best_fit['model_times'], 
+            best_fit['t0'], 
+            [complex_amplitudes[i]], 
+            [best_fit['frequencies'][i]]
+            )
         
         # Add to the overall sum
         mode_sum += mode_waveform
@@ -878,22 +986,24 @@ def plot_ringdown_modes(self, best_fit, hlm_mode=(2,2), xlim=None,
         else:
             alpha = 0.7
         
-        # Add the mode waveform to the figure. We just plot the real part
-        # for clarity.
-        ax.plot(
-            best_fit['model_times'], np.real(mode_waveform), alpha=alpha)
+        # Add the mode waveform to the figure. We just plot the real part for
+        # clarity.
+        ax.plot(best_fit['model_times'], np.real(mode_waveform), alpha=alpha)
     
     # The overall sum
-    # ax.plot(best_fit['model_times'], np.real(mode_sum), 'k--', alpha=0.7)
-    ax.plot(best_fit['model_times'], np.real(mode_sum), 'k--', alpha=1)
+    ax.plot(best_fit['model_times'], np.real(mode_sum), 'k--')
     
     if xlim is not None:
         ax.set_xlim(xlim[0],xlim[1])
-    ax.set_xlabel(f'$t\ [M]$ [{self.zero_time_method}]')
+    ax.set_xlabel('$t\ [M]$')
     
     if ylim is not None:
         ax.set_ylim(ylim[0],ylim[1])
-    ax.set_ylabel(f'Re[$h_{{{hlm_mode[0]}{hlm_mode[1]}}}$]')
+        
+    if spherical_mode is None:
+        ax.set_ylabel('$h$')
+    else:
+        ax.set_ylabel(f'$h_{{{spherical_mode[0]}{spherical_mode[1]}}}$')
     
     # Generate the list of labels for the legend
     labels = best_fit['mode_labels'].copy()
@@ -907,31 +1017,31 @@ def plot_ringdown_modes(self, best_fit, hlm_mode=(2,2), xlim=None,
         plt.close()
         
         
-def plot_mode_amplitudes(self, coefficients, labels, log=False, 
-                         outfile=None, fig_kw={}):
+def plot_mode_amplitudes(self, coefficients, labels, log=False, outfile=None, 
+                         fig_kw={}):
     """
-    Plot the magnitudes of the ringdown modes from a least squares fit.
+    Plot the magnitudes of the ringdown modes from a least-squares fit.
 
     Parameters
     ----------
-    coefficients : array
+    coefficients : array_like
         The complex coefficients from a ringdown fit. These are stored as
-        bestfit['C'] and bestfit['weighted_C'].
+        best_fit['C'] and best_fit['weighted_C'].
         
-    labels : list
+    labels : array_like
         The labels for each coefficient. These are stored as 
-        bestfit['mode_labels'] in the ringdown_fit() result dictionary.
+        best_fit['mode_labels'].
     
     log : bool, optional
         If True, use a log scale for the amplitudes. The default is False.
         
     outfile : str, optional
-        File name to save the figure. If None, the figure is not saved. 
+        File name/path to save the figure. If None, the figure is not saved. 
         The default is None.
         
     fig_kw : dict, optional
-        Additional keyword arguments to pass to plt.subplots() at the 
-        figure creation.
+        Additional keyword arguments to pass to plt.subplots() at the figure
+        creation. The default is {}.
     """
     # Get the amplitudes from the complex coefficients
     amplitudes = abs(coefficients)
@@ -967,51 +1077,47 @@ def plot_mode_amplitudes(self, coefficients, labels, log=False,
         plt.close()
 
 
-def mismatch_t0_array(self, t0_array, T_array=100, Mf=None, chif=None, 
-                      modes=[(2,2,n) for n in range(8)], mirror_modes=[], 
-                      hlm_modes=[(2,2)], t0_method='geq'):
+def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
+                      t0_method='geq', T_array=100, spherical_modes=None):
     """
     Calculate the mismatch for an array of start times.
 
     Parameters
     ----------
-    t0_array : array
-        The model start times to compute the mismatch for (relative to the 
-        zero time).
+    times : array_like
+        The times associated with the data to be fitted.
         
-    T_array : float or array, optional
-        The end time of the analysis, relative to t0. If an array, this 
-        should be the same length as t0_array. The default is 100.
+    data_dict : array_like or dict
+        The data to be fitted by the ringdown model. If a dict of 
+        spherical-harmonic modes, use the spherical_modes argument to specify
+        which modes to include in the fit.
         
-    Mf : float, optional
-        The remnant black hole mass, which along with chif determines the 
-        QNM frequencies. If None, the true remnant mass is used. The 
-        default is None.
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
         
-    chif : float, optional
-        The magnitude of the remnant black hole spin. If None, the true
-        remnant spin is used. The default is None.
+    Mf : float or array_like
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies. This can be a float, so that mass doesn't change with
+        time, or an array of the same length as times.
         
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,n) for n in range(8)].
+    chif : float or array_like
+        The magnitude of the remnant black hole spin. As with Mf, this can be
+        a float or an array.
         
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
+    t0_array : array_like
+        The start times of the ringdown model.
         
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
         
-    t0_method: str, optional
-        A requested ringdown start time will in general lie between times
-        on the default time array (the same is true for the end time of
-        the analysis). There are different approaches to deal with this, 
-        which can be specified here.
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
         
         Options are:
             
@@ -1025,102 +1131,64 @@ def mismatch_t0_array(self, t0_array, T_array=100, Mf=None, chif=None,
                 Identify the data point occuring at a time closest to t0, 
                 and take times from there.
                 
-            - 'interpolated'
-                Interpolate the data and evaluate on a new array of times,
-                with t0 being the first time. The new time array is 
-                uniformly spaced with separation self.min_dt (the 
-                minimum time between samples in the original data).
-                
         The default is 'geq'.
+        
+    T_array : float or array, optional
+        The end time of the analysis, relative to t0. If an array, this 
+        should be the same length as t0_array. The default is 100.
+        
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes 
+        the analysis should be performed on. If None, all the modes contained 
+        in data_dict are used. The default is None.
 
     Returns
     -------
-    mm_list : array
+    mm_list : ndarray
         The mismatch for each t0 value.
     """
     # List to store the mismatch from each choice of t0
     mm_list = []
     
-    if type(T_array) is not np.ndarray:
+    # Make T array-like if a float is provided
+    if type(T_array) != np.ndarray:
         T_array = T_array*np.ones(len(t0_array))
-
-    # Now try a range of start times and see what happens to the mismatch
-    for t0, T in zip(t0_array, T_array):
-
-        # Run the fit
-        best_fit = self.ringdown_fit(
-            t0=t0, T=T, Mf=Mf, chif=chif, modes=modes, 
-            mirror_modes=mirror_modes, hlm_modes=hlm_modes, 
-            t0_method=t0_method)
-
-        # Append the mismatch to the list
-        mm_list.append(best_fit['mismatch'])
-                    
-    return mm_list
-
-
-def dynamic_mismatch_t0_array(self, t0_array, T=100, Moft=None, chioft=None, 
-                              modes=[(2,2,n) for n in range(8)], 
-                              mirror_modes=[], hlm_modes=[(2,2)]):
-    """
-    Calculate the mismatch for an array of start times, performing the 
-    fits with the dynamic_ringdown_fit() function.
-
-    Parameters
-    ----------
-    t0_array : array
-        The model start times to compute the mismatch for (relative to the 
-        zero time).
+    
+    # Fits with a fixed Kerr spectrum
+    # -------------------------------
+    
+    if (type(Mf) == float) & (type(chif) == float):
         
-    T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        if type(data) == dict:
+            for t0, T in zip(t0_array, T_array):
+                best_fit = multimode_ringdown_fit(
+                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
+                    T, spherical_modes)
+                mm_list.append(best_fit['mismatch'])
+                
+        else:
+            for t0, T in zip(t0_array, T_array):
+                best_fit = ringdown_fit(
+                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
+                    T)
+                mm_list.append(best_fit['mismatch'])
+                
+    # Fits with a dynamic Kerr spectrum
+    # ---------------------------------
+    
+    else:
         
-    Moft : float or array, optional
-        The remnant black hole mass, which along with chif determines the 
-        QNM frequencies. This can be a float, so that mass doesn't change
-        with time, or an array of the same length as self.time. If None, 
-        the integrated black hole mass is used (stored as self.Moft). The 
-        default is None.
+        if type(data) == dict:
+            for t0, T in zip(t0_array, T_array):
+                best_fit = dynamic_multimode_ringdown_fit(
+                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
+                    T, spherical_modes)
+                mm_list.append(best_fit['mismatch'])
+                
+        else:
+            print("""Single-mode fits with a dynamic Kerr spectrum are not yet
+                  implemented""")
         
-    chioft : float or array, optional
-        The magnitude of the remnant black hole spin. As with Moft, this 
-        can be a float or an array. If None, the integrated black hole 
-        spin is used (stored as self.chioft_mag). The default is None.
-        
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,0),(3,2,0)].
-        
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
-        
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
-
-    Returns
-    -------
-    mm_list : array
-        The mismatch for each t0 value.
-    """
-    # List to store the mismatch from each choice of t0
-    mm_list = []
-
-    # Now try a range of start times and see what happens to the mismatch
-    for t0 in t0_array:
-
-        # Run the fit
-        best_fit = self.dynamic_ringdown_fit(
-            t0=t0, T=T, Moft=Moft, chioft=chioft, modes=modes, 
-            mirror_modes=mirror_modes, hlm_modes=hlm_modes)
-
-        # Append the mismatch to the list
-        mm_list.append(best_fit['mismatch'])
-                    
     return mm_list
 
 
@@ -1170,19 +1238,19 @@ def mismatch_M_chi_grid(self, Mf_minmax, chif_minmax, res=50, t0=0, T=100,
         The mismatch for each mass-spin combination.
     """
     # Create the mass and spin arrays
-    self.Mf_array = np.linspace(Mf_minmax[0], Mf_minmax[1], res)
-    self.chif_array = np.linspace(chif_minmax[0], chif_minmax[1], res)
+    Mf_array = np.linspace(Mf_minmax[0], Mf_minmax[1], res)
+    chif_array = np.linspace(chif_minmax[0], chif_minmax[1], res)
 
     # List to store the mismatch from each choice of M and chi
     mm_list = []
 
     # Cycle through each combination of mass and spin, calculating the
     # mismatch for each. Use a single loop for the progress bar.
-    for i in tqdm(range(len(self.Mf_array)*len(self.chif_array))):
+    for i in tqdm(range(len(Mf_array)*len(chif_array))):
 
         # Get the mass and spin values from the value of i
-        Mf = self.Mf_array[int(i/len(self.Mf_array))]
-        chif = self.chif_array[i%len(self.chif_array)]
+        Mf = Mf_array[int(i/len(Mf_array))]
+        chif = chif_array[i%len(chif_array)]
         
         # Run the fit
         bestfit = self.ringdown_fit(
@@ -1193,10 +1261,10 @@ def mismatch_M_chi_grid(self, Mf_minmax, chif_minmax, res=50, t0=0, T=100,
         mm_list.append(bestfit['mismatch'])
 
     # Convert the list of mismatches to a grid
-    self.mm_grid = np.reshape(
-        np.array(mm_list), (len(self.Mf_array), len(self.chif_array)))
+    mm_grid = np.reshape(
+        np.array(mm_list), (len(Mf_array), len(chif_array)))
     
-    return self.mm_grid
+    return mm_grid
 
 
 def plot_mismatch_M_chi_grid(self, outfile=None, plot_bestfit=False, 
