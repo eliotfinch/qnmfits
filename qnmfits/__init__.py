@@ -3,4 +3,4 @@ from .Waveforms.Simulation import Simulation
 from .Waveforms.Surrogate import NRSur7dq4, NRHybSur3dq8
 
 from .qnm import qnm
-from .qnmfits import ringdown_fit
+from .qnmfits import *

@@ -135,17 +135,17 @@ class qnm:
         
         Parameters
         ----------            
-        modes : list
-            A list of (l,m,n) tuples (where l is the angular number of the
-            mode, m is the azimuthal number, and n is the overtone number)
-            specifying which modes to load frequencies for.
+        modes : array_like
+            A sequence of (l,m,n) tuples to specify which QNMs to load 
+            frequencies for. For nonlinear modes, the tuple has the form 
+            (l1,m1,n1,l2,m2,n2,...).
             
         chif : float
             The dimensionless spin magnitude of the final black hole.
             
         Mf : float, optional
-            The mass of the final black hole. See the qnm.omega() docstring 
-            for details on units. The default is 1.
+            The mass of the final black hole. See the qnm.omega docstring for
+            details on units. The default is 1.
             
         interp : bool, optional
             If True, use a simple interpolation to find the requested 
@@ -166,11 +166,13 @@ class qnm:
         # Code for nonlinear QNMs:
         return [
             sum([self.omega(l, m, n, chif, Mf, interp) 
-                 for l, m, n in [mode[i:i+3] for i in range(0, len(mode), 3)]]) 
+                 for l, m, n in [mode[i:i+3] for i in range(0, len(mode), 3)]
+                 ]) 
             for mode in modes
             ]
     
         # Writen out, the above is doing the following:
+            
         # return_list = []
         # for mode in modes:
         #     sum_list = []
@@ -178,6 +180,7 @@ class qnm:
         #         l, m, n = mode[i:i+3]
         #         sum_list.append(self.omega(l, m, n, chif, Mf, interp))
         #     return_list.append(sum(sum_list))
+        # return return_list
     
     
     def omegaoft(self, l, m, n, chioft, Moft=1, interp=True):

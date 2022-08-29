@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
+from scipy.optimize import minimize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Class to load QNM frequencies and mixing coefficients
 from .qnm import qnm
@@ -884,7 +886,7 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
 
     if best_fit is not None:
         
-        if type(best_fit['model'] == dict):
+        if type(best_fit['model']) == dict:
         
             if spherical_mode is None:
                 print("""Please specify the best fit spherical mode to plot 
@@ -917,8 +919,8 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
         plt.close()
         
         
-def plot_ringdown_modes(self, best_fit, spherical_mode=None, xlim=None, 
-                        ylim=None, legend=True, outfile=None, fig_kw={}):
+def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None, 
+                        legend=True, outfile=None, fig_kw={}):
     """
     Plot the ringdown waveform from a least-squares fit, decomposed into its
     individual modes.
@@ -955,7 +957,7 @@ def plot_ringdown_modes(self, best_fit, spherical_mode=None, xlim=None,
     
     # Initialize an array to manually sum the modes on as a check, and get the 
     # relevent complex amplitudes
-    if type(best_fit['model'] == dict):
+    if type(best_fit['model']) == dict:
         if spherical_mode is None:
             print("""Please specify the spherical mode to plot with the 
                   spherical_mode argument.""")
@@ -980,7 +982,7 @@ def plot_ringdown_modes(self, best_fit, spherical_mode=None, xlim=None,
         # Add to the overall sum
         mode_sum += mode_waveform
         
-        # Use a reduced opacity colour if the colour cycle repeats
+        # Use a reduced opacity color if the color cycle repeats
         if i > 9:
             alpha = 0.5
         else:
@@ -1017,7 +1019,7 @@ def plot_ringdown_modes(self, best_fit, spherical_mode=None, xlim=None,
         plt.close()
         
         
-def plot_mode_amplitudes(self, coefficients, labels, log=False, outfile=None, 
+def plot_mode_amplitudes(coefficients, labels, log=False, outfile=None, 
                          fig_kw={}):
     """
     Plot the magnitudes of the ringdown modes from a least-squares fit.
@@ -1192,49 +1194,76 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
     return mm_list
 
 
-def mismatch_M_chi_grid(self, Mf_minmax, chif_minmax, res=50, t0=0, T=100, 
-                        modes=[(2,2,n) for n in range(8)], mirror_modes=[],
-                        hlm_modes=[(2,2)]):
+def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0, 
+                        mirror_modes=[], t0_method='geq', T=100, res=50,
+                        spherical_modes=None):
     """
     Calculate the mismatch for a grid of Mf and chif values.
 
     Parameters
     ----------
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data_dict : array_like or dict
+        The data to be fitted by the ringdown model. If a dict of 
+        spherical-harmonic modes, use the spherical_modes argument to specify
+        which modes to include in the fit.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+    
     Mf_minmax : tuple
         The minimum and maximum values for the mass to use in the grid.
         
     chif_minmax : tuple
-        The minimum and maximum values for the dimensionless spin 
-        magnitude to use in the grid.
+        The minimum and maximum values for the dimensionless spin magnitude to
+        use in the grid.
         
-    res : int, optional
-        The number of points used along each axis of the grid (so there 
-        are res^2 evaluations of the mismatch). The default is 50.
+    t0 : float
+        The start time of the ringdown model.
         
-    t0 : float, optional
-        The model start time to compute the mismatch for. The default is 0.
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
         
     T : float, optional
         The end time of the analysis, relative to t0. The default is 100.
         
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,n) for n in range(8)].
+    res : int, optional
+        The number of points used along each axis of the grid (so there are
+        res^2 evaluations of the mismatch). The default is 50.
         
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
-        
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes 
+        the analysis should be performed on. If None, all the modes contained 
+        in data_dict are used. The default is None.
         
     Returns
     -------
-    mm_grid : array
+    mm_grid : ndarray
         The mismatch for each mass-spin combination.
     """
     # Create the mass and spin arrays
@@ -1243,22 +1272,29 @@ def mismatch_M_chi_grid(self, Mf_minmax, chif_minmax, res=50, t0=0, T=100,
 
     # List to store the mismatch from each choice of M and chi
     mm_list = []
-
+    
     # Cycle through each combination of mass and spin, calculating the
     # mismatch for each. Use a single loop for the progress bar.
-    for i in tqdm(range(len(Mf_array)*len(chif_array))):
-
-        # Get the mass and spin values from the value of i
-        Mf = Mf_array[int(i/len(Mf_array))]
-        chif = chif_array[i%len(chif_array)]
+    if type(data) == dict:
+        for i in tqdm(range(len(Mf_array)*len(chif_array))):
+    
+            Mf = Mf_array[int(i/len(Mf_array))]
+            chif = chif_array[i%len(chif_array)]
         
-        # Run the fit
-        bestfit = self.ringdown_fit(
-            t0=t0, T=T, Mf=Mf, chif=chif, modes=modes, 
-            mirror_modes=mirror_modes, hlm_modes=hlm_modes)
-
-        # Append the mismatch to the list
-        mm_list.append(bestfit['mismatch'])
+            best_fit = multimode_ringdown_fit(
+                times, data, modes, Mf, chif, t0, mirror_modes, t0_method, T,
+                spherical_modes)
+            mm_list.append(best_fit['mismatch'])
+            
+    else:
+        for i in tqdm(range(len(Mf_array)*len(chif_array))):
+    
+            Mf = Mf_array[int(i/len(Mf_array))]
+            chif = chif_array[i%len(chif_array)]
+        
+            best_fit = ringdown_fit(
+                times, data, modes, Mf, chif, t0, mirror_modes, t0_method, T)
+            mm_list.append(best_fit['mismatch'])
 
     # Convert the list of mismatches to a grid
     mm_grid = np.reshape(
@@ -1267,67 +1303,248 @@ def mismatch_M_chi_grid(self, Mf_minmax, chif_minmax, res=50, t0=0, T=100,
     return mm_grid
 
 
-def plot_mismatch_M_chi_grid(self, outfile=None, plot_bestfit=False, 
-                             fig_kw={}):
-    """
-    Plot the mismatch as a function of final mass and spin (from the last 
-    call of mismatch_M_chi_grid) as a heatmap with a colourbar. 
+
+
+
+def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[], 
+                      t0_method='geq', T=100, spherical_modes=None, 
+                      min_method='Nelder-Mead'):
+    r"""
+    Find the Mf and chif values that minimize the mismatch for a given
+    ringdown start time and model, and from this calculate the 'distance' of 
+    the best fit mass and spin values from the true remnant properties 
+    (expressed through epsilon).
 
     Parameters
     ----------
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data_dict : array_like or dict
+        The data to be fitted by the ringdown model. If a dict of 
+        spherical-harmonic modes, use the spherical_modes argument to specify
+        which modes to include in the fit.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        
+    Mf : float
+        The remnant black hole mass. Along with calculating epsilon, this is
+        used for the initial guess in the minimization.
+        
+    chif : float
+        The magnitude of the remnant black hole spin. Along with calculating 
+        epsilon, this is used for the initial guess in the minimization.
+        
+    t0 : float
+        The start time of the ringdown model.
+        
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
+        
+    T : float, optional
+        The end time of the analysis, relative to t0. The default is 100.
+        
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes 
+        the analysis should be performed on. If None, all the modes contained 
+        in data_dict are used. The default is None.
+        
+    min_method : str, optional
+        The method used to find the mismatch minimum in the mass-spin space.
+        This can be any method available to scipy.optimize.minimize. This 
+        includes None, in which case the method is automatically chosen. The
+        default is 'Nelder-Mead'.
+
+    Returns
+    -------
+    epsilon : float
+        The difference between the true Mf and chif values and values that 
+        minimize the mismatch. Defined as 
+        
+        .. math::
+            \epsilon = \sqrt{ \left( \delta M_f \right)^2 + 
+                              \left( \delta\chi_f \right)^2 }.
+            
+        where :math:`\delta M_f = M_\mathrm{best fit} - M_f` and 
+        :math:`\delta \chi_f = \chi_\mathrm{best fit} - \chi_f`
+        
+    Mf_bestfit: float
+        The remnant mass that minimizes the mismatch.
+             
+    chif_bestfit : float
+        The remnant spin that minimizes the mismatch.
+    """ 
+    # The initial guess in the minimization
+    x0 = [Mf, chif]
+    
+    # Other settings for the minimzation
+    bounds = [(0,1.5), (0,0.99)]
+    options = {'xatol':1e-6,'disp':False}
+    
+    if type(data) == dict:
+        
+        def mismatch_M_chi(x, times, data_dict, modes, t0, mirror_modes, 
+                           t0_method, T, spherical_modes):
+            """
+            A wrapper for the multimode_ringdown_fit function, for use with 
+            the SciPy minimize function.
+            """
+            Mf = x[0]
+            chif = x[1]
+            
+            if chif > 0.99:
+                chif = 0.99
+            if chif < 0:
+                chif = 0
+            
+            best_fit = multimode_ringdown_fit(
+                times, data_dict, modes, Mf, chif, t0, mirror_modes, 
+                t0_method, T, spherical_modes)
+            
+            return best_fit['mismatch']
+        
+        # Perform the SciPy minimization
+        res = minimize(
+            mismatch_M_chi, 
+            x0,
+            args=(times, data, modes, t0, mirror_modes, t0_method, T, 
+                  spherical_modes),
+            method=min_method, 
+            bounds=bounds, 
+            options=options
+            )
+        
+    else:
+        
+        def mismatch_M_chi(x, times, data_dict, modes, t0, mirror_modes, 
+                           t0_method, T):
+            """
+            A wrapper for the ringdown_fit function, for use with the SciPy 
+            minimize function.
+            """
+            Mf = x[0]
+            chif = x[1]
+            
+            if chif > 0.99:
+                chif = 0.99
+            if chif < 0:
+                chif = 0
+            
+            best_fit = ringdown_fit(
+                times, data_dict, modes, Mf, chif, t0, mirror_modes, 
+                t0_method, T)
+            
+            return best_fit['mismatch']
+        
+        # Perform the SciPy minimization
+        res = minimize(
+            mismatch_M_chi, 
+            x0,
+            args=(times, data, modes, t0, mirror_modes, t0_method, T),
+            method=min_method, 
+            bounds=bounds, 
+            options=options
+            )
+
+    # The remnant properties that give the minimum mismatch
+    Mf_bestfit = res.x[0]
+    chif_bestfit = res.x[1]
+        
+    # Calculate epsilon
+    delta_Mf = Mf_bestfit - Mf
+    delta_chif = chif_bestfit - chif
+    epsilon = np.sqrt(delta_Mf**2 + delta_chif**2)
+        
+    return epsilon, Mf_bestfit, chif_bestfit
+
+
+def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None, 
+                             marker=None, outfile=None, fig_kw={}):
+    """
+    Helper function to plot the mismatch grid 
+    (from a call of the mismatch_M_chi_grid) as a heatmap with a colorbar. 
+    There are also options to indicate the true mass and spins, and to 
+    highlight a particular mass-spin combination.
+
+    Parameters
+    ----------
+    mm_grid : array_like
+        A 2D array of mismatches in mass-spin space.
+        
+    Mf_minmax : tuple
+        The minimum and maximum values of the mass used in the grid.
+        
+    chif_minmax : tuple
+        The minimum and maximum values of the dimensionless spin magnitude
+        used in the grid.
+        
+    truth : tuple, optional
+        A tuple of the form (Mf_true, chif_mag_true) to indicate the true
+        remnant properties on the heatmap. If None, nothing is plotted. The
+        default is None.
+        
+    marker : tuple, optional
+        A tuple of the form (Mf, chif) to indicate a particular mass-spin
+        combination. For example, this could be used to indicate the best fit
+        mass and spin from a call of calculate_epsilon. If None, nothing is 
+        plotted. The default is None.
+    
     outfile : str, optional
-        File name to save the figure. If None, the figure is not saved. 
+        File name/path to save the figure. If None, the figure is not saved. 
         The default is None.
         
-    plot_bestfit : bool, optional
-        Indicate the bestfit (minimum mismatch) mass-spin combination
-        on the figure. If available, the variables stored to 
-        self.Mf_bestfit and self.chif_bestfit are used. Otherwise, the
-        minimum value in the grid is used. The default is False.
-        
     fig_kw : dict, optional
-        Additional keyword arguments to pass to plt.subplots() at the 
-        figure creation.
+        Additional keyword arguments to pass to plt.subplots() at the figure
+        creation. The default is {}.
     """
-    # Display the mismatch grid as a colour map
+    Mf_min, Mf_max = Mf_minmax
+    chif_min, chif_max = chif_minmax
+    
     fig, ax = plt.subplots(**fig_kw)
     
-    Mf_min = self.Mf_array[0]
-    Mf_max = self.Mf_array[-1]
-    chif_min = self.chif_array[0]
-    chif_max = self.chif_array[-1]
-
+    # Plot heatmap
     im = ax.imshow(
-        np.log10(self.mm_grid), 
+        np.log10(mm_grid), 
         extent=[chif_min,chif_max,Mf_min,Mf_max],
         aspect='auto',
         origin='lower',
         interpolation='bicubic',
         cmap='gist_heat_r')
 
-    # Indicate true values
-    ax.axhline(self.Mf, color='white', alpha=0.3)
-    ax.axvline(self.chif_mag, color='white', alpha=0.3)
-    
-    # Indicate the bestfit values
-    if plot_bestfit:
+    if truth is not None:
+        # Indicate true values
+        ax.axhline(truth[0], color='w', alpha=0.3)
+        ax.axvline(truth[1], color='w', alpha=0.3)
         
-        # Find the bestfit mass and spin values, if these haven't already
-        # been calculated
-        if not hasattr(self, 'Mf_bestfit'):
-            # Identify the index of the minimum mismatch value in the grid
-            ind = np.unravel_index(
-                np.argmin(self.mm_grid), self.mm_grid.shape)
-                
-            # Get the mass and spin values this corresonds to
-            self.Mf_bestfit = self.Mf_array[ind[0]]
-            self.chif_bestfit = self.chif_array[ind[1]]
+    if marker is not None:
+        # Mark a partiular mass-spin combination
+        ax.plot(marker[1], marker[1], marker='o', markersize=3, color='k')
 
-        ax.plot(
-            self.chif_bestfit, self.Mf_bestfit, marker='o', markersize=3, 
-            color='black')
-    
-    # Colour bar
+    # Color bar
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
     cbar = fig.colorbar(im, cax=cax)
@@ -1340,135 +1557,5 @@ def plot_mismatch_M_chi_grid(self, outfile=None, plot_bestfit=False,
     
     if outfile is not None:
         plt.savefig(outfile)
-
-
-def calculate_epsilon(self, t0=0, T=100, 
-                      modes=[(2,2,n) for n in range(8)], mirror_modes=[],
-                      hlm_modes=[(2,2)], method=None, x0=None):
-    r"""
-    Find the Mf and chif values that minimize the mismatch for a given 
-    ringdown start time and model (these are stored as .Mf_bestfit and 
-    .chif_bestfit), and from this calculate the 'distance' of the best fit 
-    mass and spin values from the true remnant properties (expressed 
-    through epsilon).
-
-    Parameters
-    ----------
-    t0 : float
-        The model start time to compute the mismatch for (relative to the 
-        zero time).
+        plt.close()
         
-    T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
-        
-    modes : list, optional
-        A list of (l,m,n) tuples (where l is the angular number of the 
-        mode, m is the azimuthal number, and n is the overtone number) 
-        specifying which modes to use in the model. The default is 
-        [(2,2,n) for n in range(8)].
-        
-    mirror_modes : list, optional
-        A list of (l,m,n) tuples (as in modes), specifying which 'mirror
-        modes' to use in the model. The default is [] (no mirror modes are
-        included).
-        
-    hlm_modes : list, optional
-        A list of (l,m) tuples to specify which spherical harmonic hlm 
-        modes the analysis should be performed on. The default is [(2,2)].
-        
-    method : str, optional
-        The method used to find the mismatch minimum in the mass-spin
-        space. Available methods are:
-        
-        - Any method available to scipy.optimize.minimize
-            In this case, the scipy minimize function is called with the 
-            given method. This includes None, in which case the method is 
-            automatically chosen.
-          
-        - 'grid'
-            The minimum mismatch is determined from the last call of
-            mismatch_M_chi_grid. This is more reliable for models with
-            large number of parameters, but the accuracy is determined by
-            the choice of mass-spin limits and grid resolution.
-
-    Returns
-    -------
-    epsilon : float
-        The combined error between the bestfit Mf and chif values and the 
-        true values. Defined as 
-        
-        .. math::
-            \epsilon = \sqrt{ \left( \frac{\delta M_f}{M} \right)^2 + 
-                              \left( \delta\chi_f \right)^2 }.
-        
-    delta_Mf : float
-        The error between the bestfit Mf and true Mf values, defined as 
-        
-         .. math::
-             \delta M_f = M_{\mathrm{best fit}} - M_f.
-             
-    delta_chif : float
-        The error between the bestfit chif and true chif values, defined as
-        
-         .. math::
-             \delta \chi_f = \chi_{\mathrm{best fit}} - \chi_f.
-    """
-    if method != 'grid':
-        
-        if x0 is None:
-            # Take the true final mass and spin values as the initial guess
-            x0 = [self.Mf, self.chif_mag]
-        
-        def mismatch_M_chi(x, t0, T, modes, model, hlm_modes):
-            """
-            A wrapper for the ringdown_fit function, for use with the 
-            SciPy minimize function.
-            """
-            # Get the mass and spin values from the x list
-            Mf = x[0]
-            chif = x[1]
-            
-            if chif > 0.99:
-                chif = 0.99
-            if chif < 0:
-                chif = 0
-            
-            # Run the fit
-            bestfit = self.ringdown_fit(
-                t0=t0, T=T, Mf=Mf, chif=chif, modes=modes, 
-                mirror_modes=mirror_modes, hlm_modes=hlm_modes)
-            
-            # Store useful quantities
-            self.mm_bestfit = bestfit['mismatch']
-            self.C_bestfit = bestfit['C']
-            
-            return bestfit['mismatch']
-
-        # Call the SciPy minimization
-        res = minimize(
-            mismatch_M_chi, x0,
-            args=(t0, T, modes, mirror_modes, hlm_modes),
-            method=method, bounds=[(0,1.5), (0,0.99)], 
-            options={'xatol':1e-6,'disp':False})
-
-        # Extract best fit parameters
-        self.Mf_bestfit = res.x[0]
-        self.chif_bestfit = res.x[1]
-        
-    elif method == 'grid':
-            
-        # Identify the index of the minimum mismatch value in the grid
-        ind = np.unravel_index(
-            np.argmin(self.mm_grid), self.mm_grid.shape)
-            
-        # Get the mass and spin values this corresonds to
-        self.Mf_bestfit = self.Mf_array[ind[0]]
-        self.chif_bestfit = self.chif_array[ind[1]]
-        
-    # Calculate differences to the true values (following the 
-    # convention in arXiv:1903.08284)
-    delta_Mf = self.Mf_bestfit - self.Mf
-    delta_chif = self.chif_bestfit - self.chif_mag
-    epsilon = np.sqrt((delta_Mf/(self.m1+self.m2))**2 + delta_chif**2)
-        
-    return epsilon, delta_Mf, delta_chif
