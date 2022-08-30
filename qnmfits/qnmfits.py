@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tqdm import tqdm
 from scipy.optimize import minimize
+from scipy.interpolate import interp1d
+
+from tqdm import tqdm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Class to load QNM frequencies and mixing coefficients
@@ -296,6 +298,183 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     # Return the output dictionary
     return best_fit
 
+
+def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[], 
+                         t0_method='geq', T=100):
+    """
+    Perform a least-squares fit to some data using a ringdown model. The 
+    remnant mass and spin can be arrays of length time, which allows the Kerr 
+    spectrum to change with time.
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data : array_like
+        The data to be fitted by the ringdown model.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to include in the ringdown model. For nonlinear modes, the 
+        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        
+    Mf : float or array_like
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies. This can be a float, so that mass doesn't change with
+        time, or an array of the same length as times.
+        
+    chif : float or array_like
+        The magnitude of the remnant black hole spin. As with Mf, this can be
+        a float or an array.
+        
+    t0 : float
+        The start time of the ringdown model.
+        
+    mirror_modes : array_like, optional
+        The same as modes, but for the mirror (negative real part) QNMs. The 
+        default is [] (no mirror modes are included).
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
+        
+    T : float, optional
+        The end time of the analysis, relative to t0. The default is 100.
+
+    Returns
+    -------
+    best_fit : dict
+        A dictionary of useful information related to the fit. Keys include:
+            
+            - 'residual' : float
+                The residual from the fit.
+            - 'mismatch' : float
+                The mismatch between the best-fit waveform and the data.
+            - 'C' : ndarray
+                The best-fit complex amplitudes. There is a (time dependant)
+                complex amplitude for each ringdown mode.
+            - 'data' : ndarray
+                The (masked) data used in the fit.
+            - 'model': ndarray
+                The best-fit model waveform.
+            - 'model_times' : ndarray
+                The times at which the model is evaluated.
+            - 't0' : float
+                The ringdown start time used in the fit.
+            - 'modes' : ndarray
+                The regular ringdown modes used in the fit.
+            - 'mirror_modes' : ndarray
+                The mirror ringdown modes used in the fit.
+            - 'mode_labels' : list
+                Labels for each of the ringdown modes (used for plotting).
+            - 'frequencies' : ndarray
+                The values of the complex frequencies for all the ringdown 
+                modes. The order is [modes, mirror_modes].
+    """
+    # Mask the data with the requested method
+    if t0_method == 'geq':
+        
+        data_mask = (times>=t0) & (times<t0+T)
+        
+        times = times[data_mask]
+        data = data[data_mask]
+        
+    elif t0_method == 'closest':
+        
+        start_index = np.argmin((times-t0)**2)
+        end_index = np.argmin((times-t0-T)**2)
+        data_mask = np.arange(len(times))[start_index:end_index]
+        
+        times = times[data_mask]
+        data = data[data_mask]
+        
+    else:
+        print("""Requested t0_method is not valid. Please choose between 'geq'
+              and 'closest'""")
+
+    Mf = Mf[data_mask]
+    if type(chif) in [float, np.float64]:
+        chif = np.full(len(times), chif)
+    else:
+        chif = chif[data_mask]
+    
+    # Frequencies
+    # -----------
+    
+    # The regular (positive real part) frequencies
+    reg_frequencies = np.array(qnm.omegaoft_list(modes, chif, Mf))
+    
+    # The mirror (negative real part) frequencies can be obtained using 
+    # symmetry properties 
+    mirror_frequencies = -np.conjugate(qnm.omegaoft_list(
+        [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
+    
+    if len(mirror_modes) == 0:
+        frequencies = reg_frequencies.T
+    elif len(modes) == 0:
+        frequencies = mirror_frequencies.T
+    else:
+        frequencies = np.hstack((reg_frequencies.T, mirror_frequencies.T))
+        
+    # Construct coefficient matrix and solve
+    # --------------------------------------
+    
+    # Construct the coefficient matrix
+    a = np.exp(-1j*frequencies*(times-t0))
+
+    # Solve for the complex amplitudes, C. Also returns the sum of
+    # residuals, the rank of a, and singular values of a.
+    C, res, rank, s = np.linalg.lstsq(a, data, rcond=None)
+    
+    # Evaluate the model. This needs to be split up into the separate
+    # spherical harmonic modes.
+    model = np.einsum('ij,j->i', a, C)
+    
+    # Calculate the (sky-averaged) mismatch for the fit
+    mm = mismatch(times, model, data)
+    
+    # Create a list of mode labels (can be used for plotting)
+    labels = []
+    for mode in modes:
+        labels.append(str(mode))
+    for mode in mirror_modes:
+        labels.append(str(mode) + '$^\prime$')
+    
+    # Store all useful information to a output dictionary
+    best_fit = {
+        'residual': res,
+        'mismatch': mm,
+        'C': C,
+        'data': data,
+        'model': model,
+        'model_times': times,
+        't0': t0,
+        'modes': modes,
+        'mirror_modes': mirror_modes,
+        'mode_labels': labels,
+        'frequencies': frequencies
+        }
+    
+    # Return the output dictionary
+    return best_fit
+
     
 def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
                            mirror_modes=[], t0_method='geq', T=100, 
@@ -447,8 +626,8 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # ---------------------------
     
     # A list of lists for the mixing coefficient indices. The first 
-    # list is associated with the first hlm mode. The second list is 
-    # associated with the second hlm mode, and so on.
+    # list is associated with the first lm mode. The second list is 
+    # associated with the second lm mode, and so on.
     # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
     #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
     reg_indices_lists = [
@@ -657,12 +836,13 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         start_index = np.argmin((times-t0)**2)
         end_index = np.argmin((times-t0-T)**2)
+        data_mask = np.arange(len(times))[start_index:end_index]
         
-        times = times[start_index:end_index]
+        times = times[data_mask]
         data = np.concatenate(
-            [data_dict[lm][start_index:end_index] for lm in spherical_modes])
+            [data_dict[lm][data_mask] for lm in spherical_modes])
         data_dict_mask = {
-            lm: data_dict[lm][start_index:end_index] for lm in spherical_modes}
+            lm: data_dict[lm][data_mask] for lm in spherical_modes}
         
     else:
         print("""Requested t0_method is not valid. Please choose between
@@ -707,8 +887,8 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     if len(modes) != 0:
     
         # A list of lists for the mixing coefficient indices. The first 
-        # list is associated with the first hlm mode. The second list is 
-        # associated with the second hlm mode, and so on.
+        # list is associated with the first lm mode. The second list is 
+        # associated with the second lm mode, and so on.
         # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
         #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
         reg_indices_lists = [
@@ -725,14 +905,14 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
         # At this point, reg_mu_lists has a shape (I, J, K). We want to
         # reshape it into a 2D array of shape (I*K, J), such that the 
-        # first K rows correspond to the first hlm mode.
+        # first K rows correspond to the first lm mode.
         
         # Flatten to make reshaping easier
         reg_mu_lists = np.array([
             item for sublist in reg_mu_lists for item in sublist]).T
         
         # The above flattens the array into a 2D array of shape (K, I*J). 
-        # So,the separate hlm mode arrays are stacked horizontally, and 
+        # So,the separate lm mode arrays are stacked horizontally, and 
         # not in the desired vertical way.
         
         # Reshape
@@ -1188,8 +1368,11 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
                 mm_list.append(best_fit['mismatch'])
                 
         else:
-            print("""Single-mode fits with a dynamic Kerr spectrum are not yet
-                  implemented""")
+            for t0, T in zip(t0_array, T_array):
+                best_fit = dynamic_ringdown_fit(
+                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
+                    T)
+                mm_list.append(best_fit['mismatch'])
         
     return mm_list
 
@@ -1558,4 +1741,111 @@ def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None,
     if outfile is not None:
         plt.savefig(outfile)
         plt.close()
+
+
+def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None, 
+                    dt=None, t_taper=100, align_inspiral=True):
+    """
+    This function applies the rational filter described by [#] to remove the
+    specified qnm content from some data. The data is then time-shifted so 
+    that the early (inspiral) part of the data is left unaffected.
+    
+    Because Fourier transforms are involved, it is first necessary to
+    interpolate the data onto a regularly spaced array of times and to apply a
+    tapering window at early times. This is what the t_start, t_end, dt and 
+    t_taper arguments refer to.
+    
+    [#] S. Ma, K. Mitman, L Sun et al (2022) arXiv:2207.10870 [gr-qc]
+     
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be filtered.
         
+    data : array_like
+        The data to be filtered.
+        
+    modes : array_like
+        A sequence of (l,m,n) tuples to specify which regular (positive real 
+        part) QNMs to filter.
+        
+    Mf : float
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
+        
+    chif : float
+        The magnitude of the remnant black hole spin.
+        
+    t_start, t_end, dt, t_taper : float
+        Use regularly sampled times in range t_start to t_end (if None,
+        then defaults to end of signal) with time step dt (if None, then 
+        defaults to the minimum time step in times). The start of the signal 
+        is tapered smoothly to zero, and the length of signal effected is 
+        t_taper. The defaults are -300, None, None.
+        
+    align_inspiral: bool
+        Controls if the time shift to align the inspiral is applied. The 
+        default is True.
+        
+    Returns
+    -------
+    uniform_times : ndarray
+        Array of regularly spaced sampling times at which the filtered data
+        is evaluated.
+        
+    filtered_data : ndarray
+        The data filtered to remove the desired QNM content and time shifted
+        such that it agrees with the original data at early times (as 
+        described in Ref [#]).
+    """
+    # Default to the end of the data
+    if t_end is None:
+        t_end = times[-1]
+        
+    # Default to the minimum time spacing
+    if dt is None:
+        dt = min(np.diff(times))
+        
+    # Interpolate data onto regular grid of times
+    uniform_times = np.arange(t_start, t_end, dt)
+    uniform_data = interp1d(times, data.real, kind='cubic')(uniform_times) \
+        + 1j*interp1d(times, data.imag, kind='cubic')(uniform_times)
+
+    # Smoothly taper interpolated signal to zero at early times to avoid
+    # possible problems with the Fourier transform
+    
+    # Mask to isolate the data we will apply the taper to
+    taper_mask = uniform_times < (t_start+t_taper)
+    
+    # Construct taper
+    taper_length = np.sum(taper_mask)
+    taper_arg = np.pi*np.arange(taper_length)[::-1]/taper_length
+    taper = (np.cos(taper_arg) + 1)/2
+    
+    # Apply to the data
+    uniform_data[taper_mask] *= taper
+
+    # Forward Fourier transform
+    freqs = np.fft.fftfreq(len(uniform_data), d=dt)
+    fourier_data = np.fft.fft(uniform_data)
+
+    # Construct the rational filter
+    filt = np.ones_like(fourier_data)
+    phase_shift, time_shift = 0., 0.
+    for l, m, n in modes:
+        omega = qnm.omega(l, m, n, chif, Mf)
+        filt *= (2*np.pi*freqs+omega)/(2*np.pi*freqs+np.conj(omega))
+        phase_shift += np.angle(omega/np.conj(omega))
+        time_shift += np.abs(2*np.imag(omega)/np.conj(omega)**2)
+
+    # Apply the filter
+    fourier_data *= filt
+
+    # Apply time shift to realign the inspiral
+    if align_inspiral:
+        fourier_data *= np.exp(-2*np.pi*(1j)*freqs*time_shift-(1j)*phase_shift)
+
+    # Inverse Fourier transform
+    filtered_data = np.fft.ifft(fourier_data)
+
+    return uniform_times, filtered_data

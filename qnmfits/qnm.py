@@ -124,6 +124,11 @@ class qnm:
         omega, A, mu = self.qnm_funcs[l,m,n](
             chif, store=store, interp_only=interp)
         
+        # return sum([
+        #     self.qnm_funcs[mode_i](chif, store=store, interp_only=interp)[0] 
+        #     for mode_i in [mode[i:i+3] for i in range(0, len(mode), 3)]
+        #     ])/Mf
+        
         # Return the scaled complex frequency
         return omega/Mf
     
@@ -201,11 +206,11 @@ class qnm:
         n : int
             The overtone number of the mode.
             
-        chioft : array
+        chioft : array_like
             The dimensionless spin magnitude of the black hole.
             
-        Moft : array, optional
-            The time dependant mass of the black hole. See the qnm.omega() 
+        Moft : array_like, optional
+            The time dependant mass of the black hole. See the qnm.omega
             docstring for details on units. This can either be a float, which
             then divides through the whole omega array, or an array of the
             same length as chioft. The default is 1, in which case
@@ -218,7 +223,7 @@ class qnm:
             
         Returns
         -------
-        array
+        ndarray
             The complex QNM frequency array, with the same length as chioft.
         """
         # Test if the qnm function has been loaded for the requested mode
@@ -244,8 +249,8 @@ class qnm:
             
             for chi in chioft:
                 
-                # Access the relevant functions from the qnm_funcs dictionary, and 
-                # evaluate at the requested spin. Storing speeds up future 
+                # Access the relevant functions from the qnm_funcs dictionary, 
+                # and evaluate at the requested spin. Storing speeds up future 
                 # evaluations.
                 omega, A, mu = self.qnm_funcs[l,m,n](chi, store=True)
                 
@@ -262,15 +267,15 @@ class qnm:
         
         Parameters
         ----------            
-        modes : list
-            A list of (l,m,n) tuples (where l is the angular number of the
-            mode, m is the azimuthal number, and n is the overtone number)
-            specifying which modes to load frequencies for.
+        modes : array_like
+            A sequence of (l,m,n) tuples to specify which QNMs to load 
+            frequencies for. For nonlinear modes, the tuple has the form 
+            (l1,m1,n1,l2,m2,n2,...).
             
-        chioft : array
+        chioft : array_like
             The dimensionless spin magnitude of the black hole.
             
-        Moft : array, optional
+        Moft : array_like, optional
             The time dependant mass of the black hole. See the qnm.omega() 
             docstring for details on units. This can either be a float, which
             then divides through the whole omega array, or an array of the
@@ -288,15 +293,20 @@ class qnm:
             The list of complex QNM frequencies, where each element in the 
             list is an array of length chioft.
         """
-        # List to store the frequencies
-        omegas = []
+        # Code for linear QNMs:
+        # omegas = []
+        # for l, m, n in modes:
+        #     omegas.append(self.omegaoft(l, m, n, chioft, Moft, interp))
+        # return omegas
+            
+        # Code for nonlinear QNMs:
+        return [
+            sum([self.omegaoft(l, m, n, chioft, Moft, interp) 
+                 for l, m, n in [mode[i:i+3] for i in range(0, len(mode), 3)]
+                 ]) 
+            for mode in modes
+            ]
 
-        # For each mode, call the qnm function and append the result to the
-        # list
-        for l, m, n in modes:
-            omegas.append(self.omegaoft(l, m, n, chioft, Moft, interp))
-
-        return omegas
     
     def mu(self, l, m, lp, mp, nprime, chif, interp=False):
         """
@@ -370,8 +380,8 @@ class qnm:
         
         Parameters
         ----------
-        indices : list
-            A list of (l,m,l',m',n') tuples specifying which mixing 
+        indices : array_like
+            A sequence of (l,m,l',m',n') tuples specifying which mixing 
             coefficients to return.
             
         chif : float
@@ -420,7 +430,7 @@ class qnm:
         nprime : int
             The overtone number of the spheroidal harmonic mode.
             
-        chioft : array
+        chioft : array_like
             The dimensionless spin magnitude of the black hole.
             
         interp : bool, optional
@@ -489,11 +499,11 @@ class qnm:
         
         Parameters
         ----------
-        indices : list
-            A list of (l,m,l',m',n') tuples specifying which mixing 
+        indices : array_like
+            A sequence of (l,m,l',m',n') tuples specifying which mixing 
             coefficients to return.
             
-        chioft : array
+        chioft : array_like
             The dimensionless spin magnitude of the black hole.
             
         interp : bool, optional
@@ -517,203 +527,3 @@ class qnm:
         
         return mus
     
-    
-class qnm_geo:
-    """
-    Class for calculating the QNM frequencies from geometrical properties, see
-    https://arxiv.org/abs/1207.4253
-    """
-    
-    def __init__(self):
-        """Initialise the class."""
-        
-    def omega(self, l, m, n, Omega_theta, Omega_prec, gamma_L):
-        """
-        Return a complex frequency, :math:`\omega_{\ell m n}(\Omega_\\theta, 
-        \Omega_{\mathrm{prec}}, \gamma_L)`.
-        
-        Parameters
-        ----------
-        l : int
-            The angular number of the mode.
-            
-        m : int
-            The azimuthal number of the mode.
-            
-        n : int
-            The overtone number of the mode.
-            
-        Omega_theta : float
-            The orbital frequency of the photon orbit in the polar direction.
-            
-        Omega_prec : float
-            The precession frequency of the orbital plane.
-            
-        gamma_L : float
-            The Lyapunov exponent of the orbit.
-            
-        Returns
-        -------
-        complex
-            The complex QNM frequency.
-        """
-        omega_r = (l + 0.5)*Omega_theta + m*Omega_prec
-        omega_i = -(n + 0.5)*gamma_L
-        
-        return omega_r + 1j*omega_i
-    
-    
-    def omega_list(self, modes, Omega_theta, Omega_prec, gamma_L):
-        """
-        Return a frequency list, containing frequencies corresponding to each
-        mode in the modes list (for a given mass and spin)
-        
-        Parameters
-        ----------            
-        modes : list
-            A list of (l,m,n) tuples (where l is the angular number of the
-            mode, m is the azimuthal number, and n is the overtone number)
-            specifying which modes to load frequencies for.
-            
-        Omega_theta : float
-            The orbital frequency of the photon orbit in the polar direction.
-            
-        Omega_prec : float
-            The precession frequency of the orbital plane.
-            
-        gamma_L : float
-            The Lyapunov exponent of the orbit.
-            
-        Returns
-        -------
-        list
-            The list of complex QNM frequencies.
-        """
-        # For each mode, call the omega function and append the result to the
-        # list
-        return [self.omega(l, m, n, Omega_theta, Omega_prec, gamma_L) 
-                for l, m, n in modes]
-    
-    def omega_mod(self, l, m, n, Omega_theta, Omega_prec, gamma_L):
-        """
-        Return a complex frequency, :math:`\omega_{\ell m n}(\Omega_\\theta, 
-        \Omega_{\mathrm{prec}}, \gamma_L)`, with the correction introduced in
-        https://arxiv.org/abs/2104.07594
-        
-        Parameters
-        ----------
-        l : int
-            The angular number of the mode.
-            
-        m : int
-            The azimuthal number of the mode.
-            
-        n : int
-            The overtone number of the mode.
-            
-        Omega_theta : float
-            The orbital frequency of the photon orbit in the polar direction.
-            
-        Omega_prec : float
-            The precession frequency of the orbital plane.
-            
-        gamma_L : float
-            The Lyapunov exponent of the orbit.
-            
-        Returns
-        -------
-        complex
-            The complex QNM frequency.
-        """
-        omega_r = l*(Omega_theta + (m/(l+0.5))*Omega_prec)
-        omega_i = -(l+l**2+l**3)/(1+l+l**2+l**3)*(n + 0.5)*gamma_L
-        
-        return omega_r + 1j*omega_i
-    
-    
-    def omega_mod_list(self, modes, Omega_theta, Omega_prec, gamma_L):
-        """
-        Return a frequency list, containing frequencies corresponding to each
-        mode in the modes list (for a given mass and spin)
-        
-        Parameters
-        ----------            
-        modes : list
-            A list of (l,m,n) tuples (where l is the angular number of the
-            mode, m is the azimuthal number, and n is the overtone number)
-            specifying which modes to load frequencies for.
-            
-        Omega_theta : float
-            The orbital frequency of the photon orbit in the polar direction.
-            
-        Omega_prec : float
-            The precession frequency of the orbital plane.
-            
-        gamma_L : float
-            The Lyapunov exponent of the orbit.
-            
-        Returns
-        -------
-        list
-            The list of complex QNM frequencies.
-        """
-        # For each mode, call the omega function and append the result to the
-        # list
-        return [self.omega_mod(l, m, n, Omega_theta, Omega_prec, gamma_L) 
-                for l, m, n in modes]
-    
-    
-class Elmn:
-
-    def __init__(self):
-        self.data = np.array([
-            [0      ,  0.0743 ,  0.210 ,  0.0850 ,  0.340 ,  0.0983 ,  0.488 ,  0.115 ,  0.662  ,  0.136 ,  0.879 ,  0.164 ,  1.17 ,  0.194 ,  1.62 ,  0.148 ,  2.71 ],
-            [1      ,  0.230 ,  -2.14 ,  0.280 ,  -1.99 ,  0.346 ,  -1.81 ,  0.435 ,  -1.59 ,  0.557 ,  -1.31 ,  0.725 ,  -0.917 ,  0.927 ,  -0.292 ,  0.716 ,  1.15],
-            [2      ,  0.417 ,  1.61 ,  0.537 ,  1.78 ,  0.703 ,  2.00 ,  0.942 ,  2.27 ,  1.29 ,  2.64 ,  1.80 ,  -3.10 ,  2.39 ,  -2.22 ,  1.81 ,  -0.285],
-            [3      ,  0.585 ,  -1.08 ,  0.788 ,  -0.885 ,  1.08 ,  -0.635 ,  1.54 ,  -0.307 ,  2.28 ,  0.155 ,  3.50 ,  0.885 ,  4.63 ,  2.12 ,  3.25 ,  -1.62],
-            [4      ,  0.725 ,  2.32 ,  0.996 ,  2.54 ,  1.40 ,  2.82 ,  2.05 ,  -3.09 ,  3.26 ,  -2.56 ,  6.01 ,  -1.68 ,  8.40 ,  0.250 ,  4.68 ,  -2.88],
-            [5      ,  0.832 ,  -0.696 ,  1.12 ,  -0.462 ,  1.53 ,  -0.152 ,  2.20 ,  0.258 ,  3.44 ,  0.825 ,  6.75 ,  1.70 ,  21.6 ,  2.60 ,  0.505 ,  0.747],
-            [6      ,  0.881 ,  2.46 ,  1.12 ,  2.73 ,  1.45 ,  3.10 ,  1.94 ,  -2.69 ,  2.77 ,  -2.04 ,  4.72 ,  -1.13 ,  20.8 ,  -0.605 ,  5.76 ,  2.22],
-            [7      ,  0.854 ,  -0.702 ,  1.02 ,  -0.360 ,  1.25 ,  0.0932 ,  1.55 ,  0.689 ,  2.02 ,  1.49 ,  2.93 ,  2.62 ,  6.31 ,  -2.01 ,  6.30 ,  1.10],
-            [8      ,  0.781 ,  2.43 ,  0.898 ,  2.85 ,  1.04 ,  -2.87 ,  1.23 ,  -2.16 ,  1.48 ,  -1.20 ,  1.92 ,  0.170 ,  3.36 ,  2.34 ,  6.28 ,  0.0509],
-            [9      ,  0.700 ,  -0.678 ,  0.783 ,  -0.179 ,  0.877 ,  0.454 ,  0.973 ,  1.28 ,  1.09 ,  2.40 ,  1.28 ,  -2.26 ,  1.96 ,  0.362 ,  5.80 ,  -0.94 ],
-            [10      ,  0.628 ,  2.51 ,  0.686 ,  3.07 ,  0.737 ,  -2.49 ,  0.774 ,  -1.55 ,  0.802 ,  -0.278 ,  0.860 ,  1.58 ,  1.17 ,  -1.63 ,  5.03 ,  -1.87],
-            [11      ,  0.569 ,  -0.567 ,  0.605 ,  0.0565 ,  0.623 ,  0.847 ,  0.616 ,  1.89 ,  0.591 ,  -2.96 ,  0.576 ,  -0.852 ,  0.701 ,  2.66 ,  4.11 ,  -2.76],
-            [12      ,  0.519 ,  2.64 ,  0.537 ,  -2.96 ,  0.528 ,  -2.10 ,  0.491 ,  -0.950 ,  0.435 ,  0.640 ,  0.384 ,  2.99 ,  0.419 ,  0.657 ,  3.18 ,  2.68],
-            [13      ,  0.477 ,  -0.429,  0.478 ,  0.297 ,  0.448 ,  1.23 ,  0.390 ,  2.49 ,  0.318 ,  -2.04 ,  0.254 ,  0.550 ,  0.249 ,  -1.34 ,  2.33 ,  1.87],
-            [14      ,  0.440 ,  2.78 ,  0.427 ,  -2.72 ,  0.381 ,  -1.71 ,  0.310 ,  -0.356 ,  0.231 ,  1.54 ,  0.167 ,  -1.89 ,  0.147 ,  2.94 ,  1.62 ,  1.06 ],
-            [15      ,  0.408 ,  -0.292 ,  0.382 ,  0.533 ,  0.323 ,  1.61 ,  0.245 ,  3.07 ,  0.168 ,  -1.14 ,  0.109 ,  1.94 ,  0.0869 ,  0.936 ,  1.09 ,  0.268 ],
-            [16      ,  0.377 ,  2.91 ,  0.342 ,  -2.49 ,  0.274 ,  -1.34 ,  0.193 ,  0.228 ,  0.121 ,  2.44 ,  0.0714 ,  -0.500 ,  0.0508 ,  -1.06 ,  0.710 ,  -0.534],
-            [17      ,  0.350 ,  -0.159 ,  0.307 ,  0.763 ,  0.233 ,  1.98 ,  0.152 ,  -2.62 ,  0.0873 ,  -0.249 ,  0.0461 ,  -2.95 ,  0.0295 ,  -3.07 ,  0.453 ,  -1.34],
-            [18      ,  0.327 ,  3.04 ,  0.273 ,  -2.26 ,  0.195 ,  -0.970 ,  0.119 ,  0.805 ,  0.0624 ,  -2.94 ,  0.0296 ,  0.883 ,  0.0171 ,  1.21 ,  0.285 ,  -2.16 ],
-            [19      ,  0.307 ,  -0.0196 ,  0.245 ,  0.989 ,  0.167 ,  2.34 ,  0.0934 ,  -2.04 ,  0.0443 ,  0.635 ,  0.0189 ,  -1.57 ,  0.00983 ,  -0.792 ,  0.178 ,  -2.98 ],
-            [20      ,  0.284 ,  -3.11 ,  0.219 ,  -2.04 ,  0.140 ,  -0.593 ,  0.0726 ,  1.37 ,  0.0313 ,  -2.07 ,  0.0120 ,  2.24 ,  0.00563 ,  -2.80 ,  0.110 ,  2.48]
-        ])
-
-        self.setup_interps()
-
-
-    def setup_interps(self):
-
-        j_vals = np.array([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99])
-
-        amps = self.data[:,1::2]
-        phis = self.data[:,2::2]
-
-        self.amp_interps = [ interp1d(j_vals, amps[n], kind='cubic') for n in range(21)]
-        self.phi_interps = [ interp1d(j_vals, phis[n], kind='cubic') for n in range(21)]
-
-    def Elmn(self, j, l=2, m=2, n=0):
-
-        return self.amp_interps[n](j)*np.exp((1j)*self.phi_interps[n](j))
-    
-    def Elmn_list(self, indices, chif):
-        
-        Es = []
-        
-        # For each mode, call the qnm function and append the result to the 
-        # list
-        for l, m, n in indices:
-            Es.append(self.Elmn(chif, l, m, n))
-            
-        return Es
