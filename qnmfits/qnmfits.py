@@ -190,7 +190,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
 
     Returns
     -------
@@ -356,7 +357,8 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
 
     Returns
     -------
@@ -533,7 +535,8 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
         
     spherical_modes : array_like, optional
         A sequence of (l,m) tuples to specify which spherical-harmonic modes 
@@ -777,7 +780,8 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
         
     spherical_modes : array_like, optional
         A sequence of (l,m) tuples to specify which spherical-harmonic modes 
@@ -1316,8 +1320,9 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
         The default is 'geq'.
         
     T_array : float or array, optional
-        The end time of the analysis, relative to t0. If an array, this 
-        should be the same length as t0_array. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        If an array, this should be the same length as t0_array. The default 
+        is 100.
         
     spherical_modes : array_like, optional
         A sequence of (l,m) tuples to specify which spherical-harmonic modes 
@@ -1433,7 +1438,8 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
         
     res : int, optional
         The number of points used along each axis of the grid (so there are
@@ -1549,7 +1555,8 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         The default is 'geq'.
         
     T : float, optional
-        The end time of the analysis, relative to t0. The default is 100.
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
         
     spherical_modes : array_like, optional
         A sequence of (l,m) tuples to specify which spherical-harmonic modes 

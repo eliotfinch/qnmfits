@@ -5,23 +5,101 @@ from .Base import BaseClass
 
 
 class Custom(BaseClass):
+    """
+    A class to hold data for any waveform that has been decomposed into 
+    spherical-harmonic modes. A metadata dictionary with a remnant mass and 
+    spin must be provided, which are used in the flux calculations and frame
+    transformations.
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data.
     
-    def __init__(self, strain_data, metadata, ellMax=None, zero_time=0, 
-                 transform=None):
+    data_dict : dict
+        Data decomposed into spherical-harmonic modes. This should have keys 
+        (l,m) and array_like data of length times.
+        
+    metadata : dict
+        A dictionary of metadata associated with the data. Required keys are:
+            
+            - 'remnant_mass'
+                float : the mass of the remnant BH, in units of the total 
+                binary mass
+            - 'remnant_dimensionless_spin'
+                array_like : the dimensionless spin vector of the remnant BH.
+        
+    ellMax : int, optional
+        Maximum ell index for modes to include. All available m indicies 
+        for each ell will be included automatically. The default is None, 
+        in which case all available modes will be included.
+        
+    zero_time : optional
+        The method used to determine where the time array equals zero. 
+        
+        Options are:
+            
+        - time : float
+            The time on the default SXS simulation time array where we set t=0.
+        - (l,m) : tuple
+            The peak of the absolute value of this mode is where t=0.
+        - 'norm'
+            The time of the peak of total amplitude (e.g. Eq. 2 of 
+            https://arxiv.org/abs/1705.07089 ) is used.
+        - 'Edot'
+            The time of peak energy flux is used.
+          
+        The default is 0 (the default simulation zero time).
+        
+    transform : str or list, optional
+        Transformations to apply to the SXS data. Options are:
+            
+        - 'rotation'
+            Reperform the spin-weighted spherical harmonic decomposition in a 
+            rotated coordinate system where the z-axis is parallel to the 
+            remnant black hole spin.
+        - 'dynamic_rotation'
+            Reperform the spin-weighted spherical harmonic decomposition in a 
+            rotated coordinate system where the z-axis is parallel to the 
+            instantanious black hole spin.
+            
+        The default is None (no tranformations are applied).
+    """
+    
+    def __init__(self, times, data_dict, metadata, ellMax=None, zero_time=0, 
+                 transform=None):        
         """
         Initialize the class.
         """
-        self.times = strain_data['times']
-        self.h = strain_data
+        self.times = times
+        self.h = data_dict
         self.metadata = metadata
         self.ellMax = ellMax
         self.zero_time = zero_time
         
-        # Construct a Wigner object
-        self.wigner = spherical.Wigner(self.ellMax)
-        
         # Load in key pieces of metadata and set as class attributes
         self.load_metadata()
+        
+        # Frame independent flux quantities
+        # ---------------------------------
+        
+        # Calculate waveform mode time derivatives
+        self.calculate_hdot()
+        
+        # Calculate energy flux
+        self.calculate_Moft()
+        
+        # Calculate angular momentum flux
+        self.calculate_chioft()
+        
+        # Frame transformations
+        # ---------------------
+        
+        # Shift the time array to use the requested zero-time.
+        self.time_shift()
+        
+        # Construct a Wigner object
+        self.wigner = spherical.Wigner(self.ellMax)
         
         # Apply tranformations
         if type(transform) != list:
@@ -38,26 +116,35 @@ class Custom(BaseClass):
                 pass
             else:
                 print('Requested transformation not available.')
-                
-        # Shift the time array
-        self.time_shift()
+        
+        # Other interesting quantities
+        # ----------------------------
+        
+        # Calculate the approximate frequency evolution
+        self.calculate_foft()
         
     def load_metadata(self):
         """
         Store useful quantities from the metadata.
         """
-            
+        
         # Quantities at reference time
-        # ---------------------------- 
-        self.reference_time = self.metadata['reference_time']
+        # ----------------------------
+        ref_keys = {
+            'reference_time': 'reference_time',
+            'reference_mass1': 'm1',
+            'reference_mass2': 'm2',
+            'reference_dimensionless_spin1': 'chi1',
+            'reference_dimensionless_spin2': 'chi2'
+            }
         
-        self.m1 = self.metadata['reference_mass1']
-        self.m2 = self.metadata['reference_mass2']
-        self.M = self.m1 + self.m2
-        assert abs(self.M-1) < 1e-3, 'M not close to one'
+        for key in ref_keys.keys():
+            if key in self.metadata.keys():
+                exec(f'self.{ref_keys[key]} = self.metadata[key]')
         
-        self.chi1 = np.array(self.metadata['reference_dimensionless_spin1'])
-        self.chi2 = np.array(self.metadata['reference_dimensionless_spin2'])
+        if (('reference_mass1' in self.metadata.keys()) & 
+            ('reference_mass2' in self.metadata.keys())):
+            self.M = self.m1 + self.m2
         
         # Remnant properties
         # ------------------
@@ -72,5 +159,6 @@ class Custom(BaseClass):
         self.phif = np.arctan2(chif_norm[1], chif_norm[0])
         
         # Kick vector
-        self.vf = np.array(self.metadata['remnant_velocity'])
+        if 'remnant_velocity' in self.metadata.keys():
+            self.vf = np.array(self.metadata['remnant_velocity'])
         

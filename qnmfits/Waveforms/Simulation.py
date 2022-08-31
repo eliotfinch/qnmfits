@@ -1,11 +1,9 @@
 import numpy as np
 
-import os
-import shutil
 import spherical
 import sxs
 
-from scipy import signal as sig
+from scipy import signal
 from tabulate import tabulate
 
 from .Base import BaseClass
@@ -13,8 +11,7 @@ from .Base import BaseClass
 
 class Simulation(BaseClass):
     """
-    A class to hold the data for a simulation from the SXS catalog, with
-    functions to perform analysis.
+    A class to hold the data for a simulation from the SXS catalog.
     
     Parameters
     ----------
@@ -22,9 +19,9 @@ class Simulation(BaseClass):
         The ID number of the desired SXS simulation.
         
     ellMax : int, optional
-        Maximum ell index for modes to include. All available m indicies 
-        for each ell will be included automatically. The default is None, 
-        in which case all available modes will be included.
+        Maximum ell index for modes to include. All available m indicies for
+        each ell will be included automatically. The default is None, in which
+        case all available modes will be included.
         
     zero_time : optional
         The method used to determine where the time array equals zero. 
@@ -43,7 +40,7 @@ class Simulation(BaseClass):
         - 'common_horizon'
             The time when the common horizon is first detected is used.
           
-        Default is 0 (the default simulation zero time).
+        The default is 0 (the default simulation zero time).
         
     transform : str or list, optional
         Transformations to apply to the SXS data. Options are:
@@ -56,6 +53,8 @@ class Simulation(BaseClass):
             Reperform the spin-weighted spherical harmonic decomposition in a 
             rotated coordinate system where the z-axis is parallel to the 
             instantanious black hole spin.
+            
+        The default is None (no tranformations are applied).
         
     lev_minus_highest : int, optional
         The simulation level, relative to the highest available level, to use
@@ -73,19 +72,19 @@ class Simulation(BaseClass):
         """
         Initialize the class.
         """
-        self.ID = '{0:04d}'.format(int(ID))
+        self.ID = f'{int(ID):04d}'
         self.ellMax = ellMax
         self.zero_time = zero_time
         self.lev_minus_highest = lev_minus_highest
         self.extrapolation_order = extrapolation_order
         
-        # Download the metadata for the simulation, if it hasn't been already.
+        # Download the metadata for the simulation (if it hasn't been already).
         # This saves the .json file to the /home/user/.cache/sxs folder,
         # in an appropiately named subfolder. Note, this defaults to the
         # highest available level.
         self.metadata = sxs.load(f'SXS:BBH:{self.ID}/Lev/metadata.json')
         
-        # Highest level
+        # Highest available level
         self.highest_lev = int(self.metadata['simulation_name'][-1])
         
         # The requested level
@@ -100,7 +99,7 @@ class Simulation(BaseClass):
         # Load in key pieces of metadata and set as class attributes
         self.load_metadata()
         
-        # Download the data for the simulation, if it hasn't been already. 
+        # Download the data for the simulation (if it hasn't been already). 
         # This saves the .h5 file to the same place as the metadata json. 
         self.data = sxs.load(
             f'SXS:BBH:{self.ID}/Lev{self.level}/rhOverM', 
@@ -109,10 +108,10 @@ class Simulation(BaseClass):
         # Load data and store to the h dictionary
         self.load_data()
         
-        # Construct a Wigner object
-        self.wigner = spherical.Wigner(self.ellMax)
+        # Frame independent flux quantities
+        # ---------------------------------
         
-        # Calculate derivatives
+        # Calculate waveform mode time derivatives
         self.calculate_hdot()
         
         # Calculate energy flux
@@ -120,6 +119,15 @@ class Simulation(BaseClass):
         
         # Calculate angular momentum flux
         self.calculate_chioft()
+        
+        # Frame transformations
+        # ---------------------
+        
+        # Shift the time array to use the requested zero-time.
+        self.time_shift()
+        
+        # Construct a Wigner object
+        self.wigner = spherical.Wigner(self.ellMax)
         
         # Apply tranformations
         if type(transform) != list:
@@ -137,12 +145,8 @@ class Simulation(BaseClass):
             else:
                 print('Requested transformation not available.')
         
-        # Shift the time array to align the peak of the requested mode with
-        # zero (or the peak of the signal if no mode is given)
-        self.time_shift()
-        
-        # Create a function of the interpolated strain data
-        self.create_interpolant()
+        # Other interesting quantities
+        # ----------------------------
         
         # Calculate the approximate frequency evolution
         self.calculate_foft()
@@ -152,9 +156,7 @@ class Simulation(BaseClass):
         """
         Read in simulation metadata from the catalog json.
         """
-        # The directory of this file (current working directory)
-        self.cwd = os.path.abspath(os.path.dirname(__file__))
-            
+        
         # Quantities at reference time
         # ---------------------------- 
         self.reference_time = self.metadata['reference_time']
@@ -256,7 +258,7 @@ class Simulation(BaseClass):
             # Get peak indices (up to ~merger) using the real part of the 22 
             # mode
             h22_real = h22.data.real[:np.argmax(h22.abs)]
-            peak_indices = sig.find_peaks(h22_real)[0]
+            peak_indices = signal.find_peaks(h22_real)[0]
             
             # We will cut data before the index of the 20th peak from merger,
             # which corresponds to ~10 orbits
@@ -272,9 +274,6 @@ class Simulation(BaseClass):
         
         # Extract the time column from the data
         self.times = h22.t[mask_start:]
-        
-        # The minimum time step will be useful
-        self.min_dt = np.min(np.diff(self.times))
 
         # Dictionary to store the modes
         self.h = {}
@@ -301,15 +300,8 @@ class Simulation(BaseClass):
             ['Mf', self.Mf],
             ['chif', self.chif],
             ['vf', self.vf],
-            ['mass ratio', self.q],
+            ['q', self.q],
             ['chi_eff', self.chi_eff],
             ['chip', self.chip]
             ]))
         
-        
-    def delete_data(self):
-        """
-        Delete the data associated with the SXS simulation.
-        """
-        shutil.rmtree(os.path.abspath(
-            self.cwd + '/../data/SXS_simulations/SXS_BBH_' + self.ID))
