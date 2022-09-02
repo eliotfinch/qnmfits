@@ -137,8 +137,7 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
     return 1 - (numerator/denominator)
 
 
-def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[], 
-                 t0_method='geq', T=100):
+def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
     """
     Perform a least-squares fit to some data using a ringdown model.
 
@@ -151,9 +150,11 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         The data to be fitted by the ringdown model.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float
         The remnant black hole mass, which along with chif determines the QNM
@@ -164,10 +165,6 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -215,8 +212,6 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
                 The regular ringdown modes used in the fit.
-            - 'mirror_modes' : ndarray
-                The mirror ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
@@ -246,15 +241,7 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     # Frequencies
     # -----------
     
-    # The regular (positive real part) frequencies
-    reg_frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
-    
-    # The mirror (negative real part) frequencies can be obtained using 
-    # symmetry properties 
-    mirror_frequencies = -np.conjugate(qnm.omega_list(
-        [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
-    
-    frequencies = np.hstack((reg_frequencies, mirror_frequencies))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -278,8 +265,6 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     labels = []
     for mode in modes:
         labels.append(str(mode))
-    for mode in mirror_modes:
-        labels.append(str(mode) + '$^\prime$')
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -291,7 +276,6 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         'model_times': times,
         't0': t0,
         'modes': modes,
-        'mirror_modes': mirror_modes,
         'mode_labels': labels,
         'frequencies': frequencies
         }
@@ -300,8 +284,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     return best_fit
 
 
-def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[], 
-                         t0_method='geq', T=100):
+def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', 
+                         T=100):
     """
     Perform a least-squares fit to some data using a ringdown model. The 
     remnant mass and spin can be arrays of length time, which allows the Kerr 
@@ -316,9 +300,11 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         The data to be fitted by the ringdown model.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float or array_like
         The remnant black hole mass, which along with chif determines the QNM
@@ -331,10 +317,6 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -382,8 +364,6 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
                 The regular ringdown modes used in the fit.
-            - 'mirror_modes' : ndarray
-                The mirror ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
@@ -410,8 +390,12 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     else:
         print("""Requested t0_method is not valid. Please choose between 'geq'
               and 'closest'""")
-
-    Mf = Mf[data_mask]
+    
+    if type(Mf) in [float, np.float64]:
+        Mf = np.full(len(times), Mf)
+    else:
+        Mf = Mf[data_mask]
+        
     if type(chif) in [float, np.float64]:
         chif = np.full(len(times), chif)
     else:
@@ -420,26 +404,13 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     # Frequencies
     # -----------
     
-    # The regular (positive real part) frequencies
-    reg_frequencies = np.array(qnm.omegaoft_list(modes, chif, Mf))
-    
-    # The mirror (negative real part) frequencies can be obtained using 
-    # symmetry properties 
-    mirror_frequencies = -np.conjugate(qnm.omegaoft_list(
-        [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
-    
-    if len(mirror_modes) == 0:
-        frequencies = reg_frequencies.T
-    elif len(modes) == 0:
-        frequencies = mirror_frequencies.T
-    else:
-        frequencies = np.hstack((reg_frequencies.T, mirror_frequencies.T))
+    frequencies = np.array(qnm.omegaoft_list(modes, chif, Mf))
         
     # Construct coefficient matrix and solve
     # --------------------------------------
     
     # Construct the coefficient matrix
-    a = np.exp(-1j*frequencies*(times-t0))
+    a = np.exp(-1j*frequencies*(times-t0)).T
 
     # Solve for the complex amplitudes, C. Also returns the sum of
     # residuals, the rank of a, and singular values of a.
@@ -456,8 +427,6 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
     labels = []
     for mode in modes:
         labels.append(str(mode))
-    for mode in mirror_modes:
-        labels.append(str(mode) + '$^\prime$')
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -469,7 +438,6 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
         'model_times': times,
         't0': t0,
         'modes': modes,
-        'mirror_modes': mirror_modes,
         'mode_labels': labels,
         'frequencies': frequencies
         }
@@ -479,8 +447,7 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, mirror_modes=[],
 
     
 def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
-                           mirror_modes=[], t0_method='geq', T=100, 
-                           spherical_modes=None):
+                           t0_method='geq', T=100, spherical_modes=None):
     """
     Perform a least-squares ringdown fit to data which has been decomposed 
     into spherical-harmonic modes.
@@ -496,9 +463,11 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         length times.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float
         The remnant black hole mass, which along with chif determines the QNM
@@ -509,10 +478,6 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -569,8 +534,6 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
                 The regular ringdown modes used in the fit.
-            - 'mirror_modes' : ndarray
-                The mirror ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
@@ -611,15 +574,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # Frequencies
     # -----------
     
-    # The regular (positive real part) frequencies
-    reg_frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
-    
-    # The mirror (negative real part) frequencies can be obtained using 
-    # symmetry properties 
-    mirror_frequencies = -np.conjugate(qnm.omega_list(
-        [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
-    
-    frequencies = np.hstack((reg_frequencies, mirror_frequencies))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
     
     # Construct the coefficient matrix for use with NumPy's lstsq 
     # function. We deal with the regular mode and mirror mode mixing
@@ -633,35 +588,12 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # associated with the second lm mode, and so on.
     # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
     #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
-    reg_indices_lists = [
+    indices_lists = [
         [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
     
     # Convert each tuple of indices in indices_lists to a mu value
-    reg_mu_lists = np.conjugate([
-        qnm.mu_list(indices, chif, interp=True) for indices in reg_indices_lists])
-    
-    # Mirror mixing coefficients
-    # --------------------------
-        
-    # A list of lists for the mixing coefficient indices, see above
-    mirror_indices_lists = [
-        [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in spherical_modes]
-    
-    # We need to multiply each mu by a factor (-1)**(l+l'). Construct these
-    # factors from the indices_lists.
-    signs = [np.array([
-        (-1)**(indices[0]+indices[2]) for indices in indices_list]) 
-        for indices_list in mirror_indices_lists]
-    
-    # Convert each tuple of indices in indices_lists to a mu value
-    mirror_mu_lists = [
-        signs[i]*np.array(qnm.mu_list(indices, chif)) 
-        for i, indices in enumerate(mirror_indices_lists)]
-    
-    # Combine the regular and mirror mixing coefficients
     mu_lists = [
-        list(reg_mu_lists[i]) + list(mirror_mu_lists[i]) 
-        for i in range(len(spherical_modes))]
+        qnm.mu_list(indices, chif, interp=True) for indices in indices_lists]
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -697,8 +629,6 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     labels = []
     for mode in modes:
         labels.append(str(mode))
-    for mode in mirror_modes:
-        labels.append(str(mode) + '$^\prime$')
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -711,7 +641,6 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         'model_times': times,
         't0': t0,
         'modes': modes,
-        'mirror_modes': mirror_modes,
         'mode_labels': labels,
         'frequencies': frequencies
         }
