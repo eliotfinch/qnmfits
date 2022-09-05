@@ -1082,7 +1082,7 @@ def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None,
         mode_sum = np.zeros_like(best_fit['model'])
         complex_amplitudes = best_fit['C']
     
-    for i in range(len(best_fit['modes'] + best_fit['mirror_modes'])):
+    for i in range(len(best_fit['modes'])):
         
         # The waveform for each mode
         mode_waveform = ringdown(
