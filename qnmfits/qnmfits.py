@@ -1069,7 +1069,7 @@ def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None,
     fig, ax = plt.subplots(figsize=(8,4), **fig_kw)
     
     # Initialize an array to manually sum the modes on as a check, and get the 
-    # relevent complex amplitudes
+    # relevant complex amplitudes
     if type(best_fit['model']) == dict:
         if spherical_mode is None:
             print("""Please specify the spherical mode to plot with the 

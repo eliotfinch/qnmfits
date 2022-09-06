@@ -78,6 +78,12 @@ class qnm:
         n : int
             The overtone number of the mode.
             
+        sign : int
+            An integer with value +1 or -1, to indicate the sign of the real
+            part of the frequency. This way any regular (+1) or mirror (-1)
+            mode can be requested. Alternatively, this can be thought of as
+            prograde (sign = sgn(m)) or retrograde (sign = -sgn(m)) modes.
+            
         chif : float
             The dimensionless spin magnitude of the final black hole.
             
@@ -142,9 +148,9 @@ class qnm:
         Parameters
         ----------            
         modes : array_like
-            A sequence of (l,m,n) tuples to specify which QNMs to load 
+            A sequence of (l,m,n,sign) tuples to specify which QNMs to load 
             frequencies for. For nonlinear modes, the tuple has the form 
-            (l1,m1,n1,l2,m2,n2,...).
+            (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
             
         chif : float
             The dimensionless spin magnitude of the final black hole.
@@ -205,6 +211,12 @@ class qnm:
             
         n : int
             The overtone number of the mode.
+            
+        sign : int
+            An integer with value +1 or -1, to indicate the sign of the real
+            part of the frequency. This way any regular (+1) or mirror (-1)
+            mode can be requested. Alternatively, this can be thought of as
+            prograde (sign = sgn(m)) or retrograde (sign = -sgn(m)) modes.
             
         chioft : array_like
             The dimensionless spin magnitude of the black hole.
@@ -279,9 +291,9 @@ class qnm:
         Parameters
         ----------            
         modes : array_like
-            A sequence of (l,m,n) tuples to specify which QNMs to load 
+            A sequence of (l,m,n,sign) tuples to specify which QNMs to load 
             frequencies for. For nonlinear modes, the tuple has the form 
-            (l1,m1,n1,l2,m2,n2,...).
+            (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
             
         chioft : array_like
             The dimensionless spin magnitude of the black hole.
@@ -323,25 +335,27 @@ class qnm:
         Return a spherical-spheroidal mixing coefficient, 
         :math:`\mu_{\ell m \ell' m' n'}(\chi_f)`, for a particular spin and 
         mode combination. The indices (l,m) refer to the spherical harmonic. 
-        The indices (l',m',n') refer to the spheroidal harmonic. We use the
-        definition of the coefficients in https://arxiv.org/abs/1408.1860.
+        The indices (l',m',n') refer to the spheroidal harmonic.
 
         Parameters
         ----------
         l : int
-            The angular number of the spherical harmonic mode.
+            The angular number of the spherical-harmonic mode.
             
         m : int
-            The azimuthal number of the spherical harmonic mode.
+            The azimuthal number of the spherical-harmonic mode.
             
         lp : int
-            The angular number of the spheroidal harmonic mode.
+            The angular number of the spheroidal-harmonic mode.
             
         mp : int
-            The azimuthal number of the spheroidal harmonic mode.
+            The azimuthal number of the spheroidal-harmonic mode.
             
         nprime : int
-            The overtone number of the spheroidal harmonic mode.
+            The overtone number of the spheroidal-harmonic mode.
+            
+        sign : int
+            
             
         chif : float
             The dimensionless spin magnitude of the final black hole.
