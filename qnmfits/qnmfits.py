@@ -1192,8 +1192,8 @@ def plot_mode_amplitudes(coefficients, labels, log=False, outfile=None,
         plt.close()
 
 
-def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
-                      t0_method='geq', T_array=100, spherical_modes=None):
+def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq', 
+                      T_array=100, spherical_modes=None):
     """
     Calculate the mismatch for an array of start times.
 
@@ -1208,9 +1208,11 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
         which modes to include in the fit.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float or array_like
         The remnant black hole mass, which along with chif determines the QNM
@@ -1223,10 +1225,6 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
         
     t0_array : array_like
         The start times of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -1273,20 +1271,19 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
     # Fits with a fixed Kerr spectrum
     # -------------------------------
     
-    if (type(Mf) == float) & (type(chif) == float):
+    if (type(Mf) in [float, np.float64]) & (type(chif) in [float, np.float64]):
         
         if type(data) == dict:
             for t0, T in zip(t0_array, T_array):
                 best_fit = multimode_ringdown_fit(
-                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
-                    T, spherical_modes)
+                    times, data, modes, Mf, chif, t0, t0_method, T, 
+                    spherical_modes)
                 mm_list.append(best_fit['mismatch'])
                 
         else:
             for t0, T in zip(t0_array, T_array):
                 best_fit = ringdown_fit(
-                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
-                    T)
+                    times, data, modes, Mf, chif, t0, t0_method, T)
                 mm_list.append(best_fit['mismatch'])
                 
     # Fits with a dynamic Kerr spectrum
@@ -1297,23 +1294,21 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, mirror_modes=[],
         if type(data) == dict:
             for t0, T in zip(t0_array, T_array):
                 best_fit = dynamic_multimode_ringdown_fit(
-                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
-                    T, spherical_modes)
+                    times, data, modes, Mf, chif, t0, t0_method, T, 
+                    spherical_modes)
                 mm_list.append(best_fit['mismatch'])
                 
         else:
             for t0, T in zip(t0_array, T_array):
                 best_fit = dynamic_ringdown_fit(
-                    times, data, modes, Mf, chif, t0, mirror_modes, t0_method, 
-                    T)
+                    times, data, modes, Mf, chif, t0, t0_method, T)
                 mm_list.append(best_fit['mismatch'])
         
     return mm_list
 
 
 def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0, 
-                        mirror_modes=[], t0_method='geq', T=100, res=50,
-                        spherical_modes=None):
+                        t0_method='geq', T=100, res=50, spherical_modes=None):
     """
     Calculate the mismatch for a grid of Mf and chif values.
 
@@ -1328,9 +1323,11 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
         which modes to include in the fit.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
     
     Mf_minmax : tuple
         The minimum and maximum values for the mass to use in the grid.
@@ -1341,10 +1338,6 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -1400,7 +1393,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
             chif = chif_array[i%len(chif_array)]
         
             best_fit = multimode_ringdown_fit(
-                times, data, modes, Mf, chif, t0, mirror_modes, t0_method, T,
+                times, data, modes, Mf, chif, t0, t0_method, T, 
                 spherical_modes)
             mm_list.append(best_fit['mismatch'])
             
@@ -1411,7 +1404,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
             chif = chif_array[i%len(chif_array)]
         
             best_fit = ringdown_fit(
-                times, data, modes, Mf, chif, t0, mirror_modes, t0_method, T)
+                times, data, modes, Mf, chif, t0, t0_method, T)
             mm_list.append(best_fit['mismatch'])
 
     # Convert the list of mismatches to a grid
@@ -1421,12 +1414,8 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
     return mm_grid
 
 
-
-
-
-def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[], 
-                      t0_method='geq', T=100, spherical_modes=None, 
-                      min_method='Nelder-Mead'):
+def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, 
+                      spherical_modes=None, min_method='Nelder-Mead'):
     r"""
     Find the Mf and chif values that minimize the mismatch for a given
     ringdown start time and model, and from this calculate the 'distance' of 
@@ -1444,9 +1433,11 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         which modes to include in the fit.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float
         The remnant black hole mass. Along with calculating epsilon, this is
@@ -1458,10 +1449,6 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -1526,8 +1513,8 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
     
     if type(data) == dict:
         
-        def mismatch_M_chi(x, times, data_dict, modes, t0, mirror_modes, 
-                           t0_method, T, spherical_modes):
+        def mismatch_M_chi(x, times, data_dict, modes, t0, t0_method, T, 
+                           spherical_modes):
             """
             A wrapper for the multimode_ringdown_fit function, for use with 
             the SciPy minimize function.
@@ -1541,8 +1528,8 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
                 chif = 0
             
             best_fit = multimode_ringdown_fit(
-                times, data_dict, modes, Mf, chif, t0, mirror_modes, 
-                t0_method, T, spherical_modes)
+                times, data_dict, modes, Mf, chif, t0, t0_method, T, 
+                spherical_modes)
             
             return best_fit['mismatch']
         
@@ -1550,8 +1537,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         res = minimize(
             mismatch_M_chi, 
             x0,
-            args=(times, data, modes, t0, mirror_modes, t0_method, T, 
-                  spherical_modes),
+            args=(times, data, modes, t0, t0_method, T, spherical_modes),
             method=min_method, 
             bounds=bounds, 
             options=options
@@ -1559,8 +1545,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         
     else:
         
-        def mismatch_M_chi(x, times, data_dict, modes, t0, mirror_modes, 
-                           t0_method, T):
+        def mismatch_M_chi(x, times, data_dict, modes, t0, t0_method, T):
             """
             A wrapper for the ringdown_fit function, for use with the SciPy 
             minimize function.
@@ -1574,8 +1559,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
                 chif = 0
             
             best_fit = ringdown_fit(
-                times, data_dict, modes, Mf, chif, t0, mirror_modes, 
-                t0_method, T)
+                times, data_dict, modes, Mf, chif, t0, t0_method, T)
             
             return best_fit['mismatch']
         
@@ -1583,7 +1567,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
         res = minimize(
             mismatch_M_chi, 
             x0,
-            args=(times, data, modes, t0, mirror_modes, t0_method, T),
+            args=(times, data, modes, t0, t0_method, T),
             method=min_method, 
             bounds=bounds, 
             options=options
@@ -1604,10 +1588,10 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, mirror_modes=[],
 def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None, 
                              marker=None, outfile=None, fig_kw={}):
     """
-    Helper function to plot the mismatch grid 
-    (from a call of the mismatch_M_chi_grid) as a heatmap with a colorbar. 
-    There are also options to indicate the true mass and spins, and to 
-    highlight a particular mass-spin combination.
+    Helper function to plot the mismatch grid (from a call of the 
+    mismatch_M_chi_grid) as a heatmap with a colorbar. There are also options 
+    to indicate the true mass and spins, and to highlight a particular 
+    mass-spin combination.
 
     Parameters
     ----------

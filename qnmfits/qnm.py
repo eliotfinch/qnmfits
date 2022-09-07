@@ -355,7 +355,10 @@ class qnm:
             The overtone number of the spheroidal-harmonic mode.
             
         sign : int
-            
+            An integer with value +1 or -1, to indicate the sign of the real
+            part of the QNM frequency. If the mixing coefficient associated
+            with a -1 QNM (i.e. a mirror mode) is requested, then symmetry 
+            properties are used for the calculation.
             
         chif : float
             The dimensionless spin magnitude of the final black hole.
@@ -416,7 +419,7 @@ class qnm:
         Parameters
         ----------
         indices : array_like
-            A sequence of (l,m,l',m',n') tuples specifying which mixing 
+            A sequence of (l,m,l',m',n',sign) tuples specifying which mixing 
             coefficients to return.
             
         chif : float
@@ -464,6 +467,12 @@ class qnm:
             
         nprime : int
             The overtone number of the spheroidal harmonic mode.
+            
+        sign : int
+            An integer with value +1 or -1, to indicate the sign of the real
+            part of the QNM frequency. If the mixing coefficient associated
+            with a -1 QNM (i.e. a mirror mode) is requested, then symmetry 
+            properties are used for the calculation.
             
         chioft : array_like
             The dimensionless spin magnitude of the black hole.
@@ -536,7 +545,7 @@ class qnm:
         Parameters
         ----------
         indices : array_like
-            A sequence of (l,m,l',m',n') tuples specifying which mixing 
+            A sequence of (l,m,l',m',n',sign) tuples specifying which mixing 
             coefficients to return.
             
         chioft : array_like
