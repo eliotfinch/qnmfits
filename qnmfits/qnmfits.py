@@ -241,7 +241,7 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
     # Frequencies
     # -----------
     
-    frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf))
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -262,9 +262,7 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
     mm = mismatch(times, model, data)
     
     # Create a list of mode labels (can be used for plotting)
-    labels = []
-    for mode in modes:
-        labels.append(str(mode))
+    labels = [str(mode) for mode in modes]
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -404,7 +402,7 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq',
     # Frequencies
     # -----------
     
-    frequencies = np.array(qnm.omegaoft_list(modes, chif, Mf))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf))
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -424,9 +422,7 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq',
     mm = mismatch(times, model, data)
     
     # Create a list of mode labels (can be used for plotting)
-    labels = []
-    for mode in modes:
-        labels.append(str(mode))
+    labels = [str(mode) for mode in modes]
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -574,26 +570,23 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # Frequencies
     # -----------
     
-    frequencies = np.array(qnm.omega_list(modes, chif, Mf, interp=True))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf))
     
-    # Construct the coefficient matrix for use with NumPy's lstsq 
-    # function. We deal with the regular mode and mirror mode mixing
-    # coefficients separately.
+    # Construct the coefficient matrix for use with NumPy's lstsq function. 
     
-    # Regular mixing coefficients
-    # ---------------------------
+    # Mixing coefficients
+    # -------------------
     
-    # A list of lists for the mixing coefficient indices. The first 
-    # list is associated with the first lm mode. The second list is 
-    # associated with the second lm mode, and so on.
+    # A list of lists for the mixing coefficient indices. The first list is
+    # associated with the first lm mode. The second list is associated with
+    # the second lm mode, and so on.
     # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
     #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
     indices_lists = [
         [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
     
     # Convert each tuple of indices in indices_lists to a mu value
-    mu_lists = [
-        qnm.mu_list(indices, chif, interp=True) for indices in indices_lists]
+    mu_lists = [qnm.mu_list(indices, chif) for indices in indices_lists]
         
     # Construct coefficient matrix and solve
     # --------------------------------------
@@ -626,9 +619,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     mm = multimode_mismatch(times, model_dict, data_dict)
     
     # Create a list of mode labels (can be used for plotting)
-    labels = []
-    for mode in modes:
-        labels.append(str(mode))
+    labels = [str(mode) for mode in modes]
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -650,7 +641,7 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
 
 
 def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0, 
-                                   mirror_modes=[], t0_method='geq', T=100, 
+                                   t0_method='geq', T=100, 
                                    spherical_modes=None):
     """
     Perform a least-squares ringdown fit to data which has been decomposed 
@@ -668,9 +659,11 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         length times.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to include in the ringdown model. For nonlinear modes, the 
-        tuple has the form (l1,m1,n1,l2,m2,n2,...).
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
         
     Mf : float or array_like
         The remnant black hole mass, which along with chif determines the QNM
@@ -683,10 +676,6 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         
     t0 : float
         The start time of the ringdown model.
-        
-    mirror_modes : array_like, optional
-        The same as modes, but for the mirror (negative real part) QNMs. The 
-        default is [] (no mirror modes are included).
         
     t0_method : str, optional
         A requested ringdown start time will in general lie between times on
@@ -792,107 +781,54 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     # Frequencies
     # -----------
     
-    # The regular (positive real part) frequencies
-    reg_frequencies = np.array(qnm.omegaoft_list(modes, chif, Mf))
-    
-    # The mirror (negative real part) frequencies can be obtained using 
-    # symmetry properties 
-    mirror_frequencies = -np.conjugate(qnm.omegaoft_list(
-        [(l,-m,n) for l,m,n in mirror_modes], chif, Mf))
-    
-    if len(mirror_modes) == 0:
-        frequencies = reg_frequencies.T
-    elif len(modes) == 0:
-        frequencies = mirror_frequencies.T
-    else:
-        frequencies = np.hstack((reg_frequencies.T, mirror_frequencies.T))
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf)).T
     
     # We stack as many frequency arrays on top of each other as we have
     # spherical_modes
     frequencies = np.vstack(len(spherical_modes)*[frequencies])
         
-    # Construct the coefficient matrix for use with NumPy's lstsq function. We 
-    # deal with the regular mode and mirror mode mixing coefficients separately.
+    # Construct the coefficient matrix for use with NumPy's lstsq function.
     
-    # Regular mixing coefficients
-    # ---------------------------
+    # Mixing coefficients
+    # -------------------
     
-    if len(modes) != 0:
+    # A list of lists for the mixing coefficient indices. The first list is
+    # associated with the first lm mode. The second list is associated with 
+    # the second lm mode, and so on.
+    # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
+    #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
+    indices_lists = [
+        [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
     
-        # A list of lists for the mixing coefficient indices. The first 
-        # list is associated with the first lm mode. The second list is 
-        # associated with the second lm mode, and so on.
-        # e.g. [ [(2,2,2',2',0'), (2,2,3',2',0')], 
-        #        [(3,2,2',2',0'), (3,2,3',2',0')] ]
-        reg_indices_lists = [
-            [lm_mode+mode for mode in modes] for lm_mode in spherical_modes]
-        
-        # Convert each tuple of indices in indices_lists to an array of mu 
-        # values
-        reg_mu_lists = np.conjugate([
-            qnm.muoft_list(indices, chif) for indices in reg_indices_lists])
-        
-        # I = len(spherical_modes)
-        # J = len(modes) + len(mirror_modes)
-        # K = len(times)
-        
-        # At this point, reg_mu_lists has a shape (I, J, K). We want to
-        # reshape it into a 2D array of shape (I*K, J), such that the 
-        # first K rows correspond to the first lm mode.
-        
-        # Flatten to make reshaping easier
-        reg_mu_lists = np.array([
-            item for sublist in reg_mu_lists for item in sublist]).T
-        
-        # The above flattens the array into a 2D array of shape (K, I*J). 
-        # So,the separate lm mode arrays are stacked horizontally, and 
-        # not in the desired vertical way.
-        
-        # Reshape
-        reg_mu_lists = np.vstack([
-            reg_mu_lists[:,i*len(modes):(i+1)*len(modes)] 
-            for i in range(len(spherical_modes))])
-        
-        # The above reshaping converts the shape into the desired (I*K, J)
-        
-    if len(mirror_modes) != 0:
+    # Convert each tuple of indices in indices_lists to an array of mu values
+    mu_lists = [qnm.mu_list(indices, chif) for indices in indices_lists]
     
-        # Mirror mixing coefficients
-        # --------------------------
-            
-        # A list of lists for the mixing coefficient indices, see above
-        mirror_indices_lists = [
-            [(l,-m)+(L,-M,N) for L,M,N in mirror_modes] for l,m in spherical_modes]
-        
-        # We need to multiply each mu by a factor (-1)**(l+l'). Construct these
-        # factors from the indices_lists.
-        signs = [np.array([
-            (-1)**(indices[0]+indices[2]) for indices in indices_list]) 
-            for indices_list in mirror_indices_lists]
-        
-        # Convert each tuple of indices in indices_lists to a mu value
-        mirror_mu_lists = np.array([
-            signs[i][:,None]*np.array(qnm.muoft_list(indices, chif))
-            for i, indices in enumerate(mirror_indices_lists)])
-        
-        # Flatten
-        mirror_mu_lists = np.array([
-            item for sublist in mirror_mu_lists for item in sublist]).T
-        
-        # Reshape
-        mirror_mu_lists = np.vstack([
-            mirror_mu_lists[:,i*len(mirror_modes):(i+1)*len(mirror_modes)] 
-            for i in range(len(spherical_modes))])
+    # I = len(spherical_modes)
+    # J = len(modes)
+    # K = len(times)
     
-    if len(mirror_modes) == 0:
-        mu_lists = reg_mu_lists
-    elif len(modes) == 0:
-        mu_lists = mirror_mu_lists
-    else:
-        # Combine the regular and mirror mixing coefficients
-        mu_lists = np.hstack((reg_mu_lists, mirror_mu_lists))
+    # At this point, mu_lists has a shape (I, J, K). We want to reshape it 
+    # into a 2D array of shape (I*K, J), such that the first K rows correspond 
+    # to the first lm mode.
     
-    # Construct the coefficient matrix
+    # Flatten to make reshaping easier
+    mu_lists = np.array([item for sublist in mu_lists for item in sublist]).T
+    
+    # The above flattens the array into a 2D array of shape (K, I*J). So, the
+    # separate lm mode arrays are stacked horizontally, and not in the desired 
+    # vertical way.
+    
+    # Reshape
+    mu_lists = np.vstack([
+        mu_lists[:,i*len(modes):(i+1)*len(modes)] 
+        for i in range(len(spherical_modes))
+        ])
+    
+    # The above reshaping converts the shape into the desired (I*K, J)
+    
+    # Construct coefficient matrix and solve
+    # --------------------------------------
+    
     stacked_times = np.vstack(len(spherical_modes)*[times[:,None]])
     a = mu_lists*np.exp(-1j*frequencies*(stacked_times-t0))
 
@@ -923,11 +859,7 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
     mm = multimode_mismatch(times, model_dict, data_dict)
     
     # Create a list of mode labels (can be used for plotting)
-    labels = []
-    for mode in modes:
-        labels.append(str(mode))
-    for mode in mirror_modes:
-        labels.append(str(mode) + '$^\prime$')
+    labels = [str(mode) for mode in modes]
     
     # Store all useful information to a output dictionary
     best_fit = {
@@ -940,7 +872,6 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
         'model_times': times,
         't0': t0,
         'modes': modes,
-        'mirror_modes': mirror_modes,
         'mode_labels': labels,
         'frequencies': frequencies
         }
@@ -950,9 +881,10 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
 
 
 def plot_ringdown(times, data, xlim=[-50,100], best_fit=None, 
-                  spherical_mode=None, outfile=None, fig_kw={}):
+                  spherical_mode=None, log=False, outfile=None, fig_kw={}):
     """
-    Plot some data, with an option to plot a best fit model on top.
+    Plot some data, with an option to plot a best fit model on top. Only the
+    real part of the data (and model if provided) is plotted for clarity.
 
     Parameters
     ----------
@@ -977,6 +909,10 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
         A (l,m) tuple to specify which spherical harmonic mode to plot. The 
         default is None.
         
+    log : bool, optional
+        If True, use a log scale for the y-axis. This also plots the absolute
+        value of the data. The default is False.
+        
     outfile : str, optional
         File name/path to save the figure. If None, the figure is not saved. 
         The default is None.
@@ -991,11 +927,16 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
                   spherical_mode argument.""")
         else:
             data = data[spherical_mode]
-    
+            
+    # We only plot the real part
+    data = np.real(data)
+            
+    if log:
+        data = abs(data)
+        
     fig, ax = plt.subplots(figsize=(8,4), **fig_kw)
     
-    ax.plot(times, np.real(data), 'k-', label=r'$h_+$')
-    # ax.plot(self.times, -np.imag(data), 'k--', label=r'$h_\times$')
+    ax.plot(times, data, 'k-', label='Re[data]')
 
     if best_fit is not None:
         
@@ -1011,12 +952,15 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
         else:
             model_data = best_fit['model']
             
+        model_data = np.real(model_data)
+        
+        if log:
+            model_data = abs(model_data)
+            
         ax.plot(
-            best_fit['model_times'], np.real(model_data), 'r-', 
-            label=r'$h_+$ model', alpha=0.8)
-        # ax.plot(
-        #     best_fit['model_times'], -np.imag(model_data), 'r--',
-        #     label=r'$h_\times$ model', alpha=0.8)
+            best_fit['model_times'], model_data, 'r-', label='Re[model]', 
+            alpha=0.8
+            )
 
     ax.set_xlim(xlim[0],xlim[1])
     ax.set_xlabel('$t\ [M]$')
@@ -1024,6 +968,9 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
         ax.set_ylabel('$h$')
     else:
         ax.set_ylabel(f'$h_{{{spherical_mode[0]}{spherical_mode[1]}}}$')
+        
+    if log:
+        ax.set_yscale('log')
 
     ax.legend(loc='upper right', frameon=False)
     
@@ -1667,7 +1614,7 @@ def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None,
                     dt=None, t_taper=100, align_inspiral=True):
     """
     This function applies the rational filter described by [#] to remove the
-    specified qnm content from some data. The data is then time-shifted so 
+    specified QNM content from some data. The data is then time-shifted so 
     that the early (inspiral) part of the data is left unaffected.
     
     Because Fourier transforms are involved, it is first necessary to
@@ -1686,8 +1633,9 @@ def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None,
         The data to be filtered.
         
     modes : array_like
-        A sequence of (l,m,n) tuples to specify which regular (positive real 
-        part) QNMs to filter.
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to filter. For 
+        regular (positive real part) modes use sign=+1. For mirror (negative 
+        real part) modes use sign=-1.
         
     Mf : float
         The remnant black hole mass, which along with chif determines the QNM
@@ -1752,8 +1700,8 @@ def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None,
     # Construct the rational filter
     filt = np.ones_like(fourier_data)
     phase_shift, time_shift = 0., 0.
-    for l, m, n in modes:
-        omega = qnm.omega(l, m, n, chif, Mf)
+    for l, m, n, sign in modes:
+        omega = qnm.omega(l, m, n, sign, chif, Mf)
         filt *= (2*np.pi*freqs+omega)/(2*np.pi*freqs+np.conj(omega))
         phase_shift += np.angle(omega/np.conj(omega))
         time_shift += np.abs(2*np.imag(omega)/np.conj(omega)**2)

@@ -9,7 +9,7 @@ from tabulate import tabulate
 from .Base import BaseClass
 
 
-class Simulation(BaseClass):
+class SXS(BaseClass):
     """
     A class to hold the data for a simulation from the SXS catalog.
     
