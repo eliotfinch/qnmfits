@@ -211,12 +211,12 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
             - 't0' : float
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
-                The regular ringdown modes used in the fit.
+                The ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
-                modes. The order is [modes, mirror_modes].
+                modes.
     """
     # Mask the data with the requested method
     if t0_method == 'geq':
@@ -361,12 +361,12 @@ def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq',
             - 't0' : float
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
-                The regular ringdown modes used in the fit.
+                The ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
-                modes. The order is [modes, mirror_modes].
+                modes.
     """
     # Mask the data with the requested method
     if t0_method == 'geq':
@@ -529,12 +529,12 @@ def multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
             - 't0' : float
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
-                The regular ringdown modes used in the fit.
+                The ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
-                modes. The order is [modes, mirror_modes].
+                modes.
     """
     # Use the requested spherical modes
     if spherical_modes is None:
@@ -731,14 +731,12 @@ def dynamic_multimode_ringdown_fit(times, data_dict, modes, Mf, chif, t0,
             - 't0' : float
                 The ringdown start time used in the fit.
             - 'modes' : ndarray
-                The regular ringdown modes used in the fit.
-            - 'mirror_modes' : ndarray
-                The mirror ringdown modes used in the fit.
+                The ringdown modes used in the fit.
             - 'mode_labels' : list
                 Labels for each of the ringdown modes (used for plotting).
             - 'frequencies' : ndarray
                 The values of the complex frequencies for all the ringdown 
-                modes. The order is [modes, mirror_modes].
+                modes.
     """
     # Use the requested spherical modes
     if spherical_modes is None:
