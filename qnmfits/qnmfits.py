@@ -1715,3 +1715,116 @@ def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None,
     filtered_data = np.fft.ifft(fourier_data)
 
     return uniform_times, filtered_data
+
+
+def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq', 
+               T=100, nmax=7, spherical_modes=None):
+    """
+    An implementation of the greedy fit algorithm, as described in 
+    https://arxiv.org/abs/2110.15922
+    """
+    
+    # Use the requested spherical modes
+    if spherical_modes is None:
+        spherical_modes = list(data_dict.keys())
+    
+    # Mask the data with the requested method
+    if t0_method == 'geq':
+        
+        data_mask = (times>=t0) & (times<t0+T)
+        
+        times = times[data_mask]
+        data_dict_mask = {lm: data_dict[lm][data_mask] for lm in spherical_modes}
+        
+    elif t0_method == 'closest':
+        
+        start_index = np.argmin((times-t0)**2)
+        end_index = np.argmin((times-t0-T)**2)
+        
+        times = times[start_index:end_index]
+        data_dict_mask = {
+            lm: data_dict[lm][start_index:end_index] for lm in spherical_modes}
+        
+    else:
+        print("""Requested t0_method is not valid. Please choose between
+              'geq' and 'closest'.""")
+    
+    data_dict = data_dict_mask
+    
+    # The power in our chosen data
+    data_power = sum([
+        np.trapz(abs(data_dict[lm])**2, x=times) for lm in spherical_modes
+        ])
+    
+    # (I) Begin with an empty list of modes
+    modes = []
+    
+    # Our initial model consists of zeros
+    model = {lm: np.zeros(len(times)) for lm in spherical_modes}
+    
+    # Add modes until the maximum has been reached (or break early if the 
+    # target modelled power has been reached)
+    for i in range(Nmax):
+        
+        # (II) Form the residual, R, between the data and the model
+        R = {lm: data_dict[lm] - model[lm] for lm in spherical_modes}
+        
+        # (III) Compute the power in each mode of the residual
+        P = {lm: np.trapz(abs(R[lm])**2, x=times) for lm in spherical_modes}
+        
+        # [(VI) and (VII)] Compute the fraction of residual power to target 
+        # waveform power, and terminate if F < Ftarget 
+        F = sum([P[lm] for lm in spherical_modes])/data_power
+        
+        if F < Ftarget:
+            break
+        
+        # (IV) Rank the modes in the residuals by their powers
+        lm_bar_ranked = sorted(P, key=P.get, reverse=True)
+        
+        # Iterate through the spherical modes until a valid QNM to add is 
+        # found
+        for lm_bar in lm_bar_ranked:
+        
+            # Case 1: no QNMs with l=lbar, m=mbar are present in the modes 
+            # list - add the n=0 mode
+            if lm_bar not in [(l,m) for l,m,n,sign in modes]:
+                modes.append((*lm_bar, 0, 1))
+                break
+            
+            else:
+                # Cases 2 and 3: some QNMs with l=lbar, m=mbar are already 
+                # present in the modes list
+                nbar = max(
+                    [mode[2] for mode in modes if mode[0:2] == lm_bar]
+                    ) + 1
+                
+                if nbar <= nmax:
+                    # Case 2: nmax has not been reached - add the next 
+                    # smallest n
+                    modes.append((*lm_bar, nbar, 1))
+                    break
+                
+                else:
+                    # Case 3: all lmn_bar modes have already been included -
+                    # move onto the next highest power residual
+                    continue
+                
+        # (V) After identifying the next QNM to include, resolve the linear
+        # least squares problem to find the amplitudes
+        result = multimode_ringdown_fit(
+            times, 
+            data_dict, 
+            modes, 
+            Mf, 
+            chif, 
+            t0, 
+            t0_method=t0_method,
+            T=T,
+            spherical_modes=spherical_modes
+            )
+        
+        amplitudes = result['C']
+        model = result['model']
+        
+    return modes, amplitudes, model
