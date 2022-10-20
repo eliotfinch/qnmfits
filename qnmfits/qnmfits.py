@@ -1606,6 +1606,148 @@ def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None,
     if outfile is not None:
         plt.savefig(outfile)
         plt.close()
+        
+        
+def free_frequency_fit(times, data, t0, modes=[], Mf=None, chif=None, 
+                       t0_method='geq', T=100, min_method='Nelder-Mead'):
+    """
+    Find the complex frequency that minimizes the mismatch for a given 
+    ringdown start time. a Set of "fixed" frequencies can also be included in 
+    the fit, specified through the modes, Mf, and chif arguments.
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be fitted.
+        
+    data : array_like
+        The data to be fitted by the ringdown model.
+        
+    t0 : float
+        The start time of the ringdown model.
+        
+    modes : array_like, optional
+        A sequence of (l,m,n,sign) tuples to specify which (fixed) QNMs to 
+        include in the ringdown model. For regular (positive real part) modes 
+        use sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
+        
+    Mf : float, optional
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
+        
+    chif : float, optional
+        The magnitude of the remnant black hole spin.
+        
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+        
+        Options are:
+            
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+                
+        The default is 'geq'.
+        
+    T : float, optional
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
+        
+    min_method : str, optional
+        The method used to find the mismatch minimum in the complex-frequency 
+        space. This can be any method available to scipy.optimize.minimize. 
+        This includes None, in which case the method is automatically chosen. 
+        The default is 'Nelder-Mead'.
+
+    Returns
+    -------
+    omega_bestfit : complex
+        The complex frequency that minimizes the mismatch.
+    """
+    # Mask the data with the requested method
+    if t0_method == 'geq':
+        
+        data_mask = (times>=t0) & (times<t0+T)
+        
+        times = times[data_mask]
+        data = data[data_mask]
+        
+    elif t0_method == 'closest':
+        
+        start_index = np.argmin((times-t0)**2)
+        end_index = np.argmin((times-t0-T)**2)
+        
+        times = times[start_index:end_index]
+        data = data[start_index:end_index]
+        
+    else:
+        print("""Requested t0_method is not valid. Please choose between 'geq'
+              and 'closest'""")
+              
+    # Compute fixed frequencies - we always include these in the fit (along 
+    # with the additional free frequency)
+    fixed_frequencies = np.array(qnm.omega_list(modes, chif, Mf))
+    
+    # The initial guess in the minimization
+    x0 = [1, -0.5]
+    
+    # Other settings for the minimzation
+    bounds = [(0,2), (-1,0)]
+    options = {'xatol':1e-6,'disp':False}
+    
+    def mismatch_f_tau(x, times, data, t0):
+        """
+        A modification to the ringdown_fit function which allows a single 
+        frequency to be varied, for use with the SciPy minimize function.
+        """
+        # Extract the value of the free frequency
+        omega_free = x[0] + 1j*x[1]
+        
+        # Combine the free frequency with the fixed frequencies
+        frequencies = np.hstack([fixed_frequencies, omega_free])
+        
+        # Construct the coefficient matrix
+        a = np.array([
+            np.exp(-1j*frequencies[i]*(times-t0)) for i in range(len(frequencies))
+            ]).T
+    
+        # Solve for the complex amplitudes, C. Also returns the sum of 
+        # residuals, the rank of a, and singular values of a.
+        C, res, rank, s = np.linalg.lstsq(a, data, rcond=None)
+    
+        # Evaluate the model
+        model = np.einsum('ij,j->i', a, C)
+        
+        # Calculate the mismatch for the fit
+        mm = mismatch(times, model, data)
+        
+        return mm
+    
+    # Perform the SciPy minimization
+    res = minimize(
+        mismatch_f_tau, 
+        x0,
+        args=(times, data, t0),
+        method=min_method, 
+        bounds=bounds, 
+        options=options
+        )
+    
+    omega_bestfit = res.x[0] + 1j*res.x[1]
+    
+    return omega_bestfit
+    
 
 
 def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None, 
