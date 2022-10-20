@@ -1810,7 +1810,7 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
                     # move onto the next highest power residual
                     continue
                 
-        # (V) After identifying the next QNM to include, resolve the linear
+        # (V) After identifying the next QNM to include, re-solve the linear
         # least squares problem to find the amplitudes
         result = multimode_ringdown_fit(
             times, 
