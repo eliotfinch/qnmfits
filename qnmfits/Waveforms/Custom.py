@@ -72,13 +72,23 @@ class Custom(BaseClass):
         Initialize the class.
         """
         self.times = times
-        self.h = data_dict
         self.metadata = metadata
         self.ellMax = ellMax
         self.zero_time = zero_time
         
         # Load in key pieces of metadata and set as class attributes
         self.load_metadata()
+        
+        # If no ellMax is given, we load all the modes
+        if self.ellMax == None:
+            # The maximum l value in the data
+            self.ellMax = max([l for (l,m) in data_dict.keys()])
+        
+        # Only keep data up to ellMax
+        self.h = {}
+        for lm in data_dict.keys():
+            if lm[0] <= self.ellMax:
+                self.h[lm] = data_dict[lm]
         
         # Frame independent flux quantities
         # ---------------------------------
