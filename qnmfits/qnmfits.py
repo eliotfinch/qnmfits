@@ -970,7 +970,7 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
     if log:
         ax.set_yscale('log')
 
-    ax.legend(loc='upper right', frameon=False)
+    ax.legend(frameon=False)
     
     if outfile is not None:
         plt.savefig(outfile)
