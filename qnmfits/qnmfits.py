@@ -7,6 +7,8 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from scipy.interpolate import InterpolatedUnivariateSpline as spline
+
 # Class to load QNM frequencies and mixing coefficients
 from .qnm import qnm
 qnm = qnm()
@@ -68,6 +70,48 @@ def ringdown(time, start_time, complex_amplitudes, frequencies):
         for n in range(len(frequencies))], axis=0)
         
     return h
+
+
+def ringdown_derivative(time, start_time, complex_amplitudes, frequencies):
+    """
+
+    Parameters
+    ----------
+    time : array_like
+        The times at which the model is evalulated.
+        
+    start_time : float
+        The time at which the model begins. Should lie within the times array.
+        
+    complex_amplitudes : array_like
+        The complex amplitudes of the modes.
+        
+    frequencies : array_like
+        The complex frequencies of the modes. These should be ordered in the
+        same order as the amplitudes.
+
+    Returns
+    -------
+    hdot : ndarray
+        The plus and cross components of the time derivative of the ringdown 
+        waveform, expressed as a complex number.
+    """
+    # Create an empty array to add the result to
+    hdot = np.zeros(len(time), dtype=complex)
+    
+    # Mask so that we only consider times after the start time
+    t_mask = time >= start_time
+
+    # Shift the time so that the waveform starts at time zero, and mask times
+    # after the start time
+    time = (time - start_time)[t_mask]
+        
+    # Construct the waveform, summing over each mode
+    hdot[t_mask] = np.sum([
+        -1j*frequencies[n]*complex_amplitudes[n]*np.exp(-1j*frequencies[n]*time)
+        for n in range(len(frequencies))], axis=0)
+        
+    return hdot
 
 
 def mismatch(times, wf_1, wf_2):
@@ -1718,7 +1762,7 @@ def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None,
 
 
 def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq', 
-               T=100, nmax=7, spherical_modes=None):
+               T=100, nmax=7, spherical_modes=None, news=False):
     """
     An implementation of the greedy fit algorithm, as described in 
     https://arxiv.org/abs/2110.15922
@@ -1728,6 +1772,22 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
     if spherical_modes is None:
         spherical_modes = list(data_dict.keys())
     
+    # Calculate the time derivative of the data if we want to work in the news
+    # domain
+    if news:
+        
+        # Dictionary to store the mode derivatives
+        hdot = {}
+        
+        for lm in spherical_modes:
+            
+            # Load the mode data
+            data = data_dict[lm]
+            
+            # Calculate the derivative with splines and store to dictionary
+            hdot[lm] = spline(times, data.real).derivative()(times) \
+                + 1j*spline(times, data.imag).derivative()(times)
+    
     # Mask the data with the requested method
     if t0_method == 'geq':
         
@@ -1735,6 +1795,9 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
         
         times = times[data_mask]
         data_dict_mask = {lm: data_dict[lm][data_mask] for lm in spherical_modes}
+        
+        if news:
+            hdot_mask = {lm: hdot[lm][data_mask] for lm in spherical_modes}
         
     elif t0_method == 'closest':
         
@@ -1745,16 +1808,27 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
         data_dict_mask = {
             lm: data_dict[lm][start_index:end_index] for lm in spherical_modes}
         
+        if news:
+            hdot_mask = {
+                lm: hdot[lm][start_index:end_index] for lm in spherical_modes}
+        
     else:
         print("""Requested t0_method is not valid. Please choose between
               'geq' and 'closest'.""")
     
     data_dict = data_dict_mask
+    if news:
+        hdot = hdot_mask
     
     # The power in our chosen data
-    data_power = sum([
-        np.trapz(abs(data_dict[lm])**2, x=times) for lm in spherical_modes
-        ])
+    if news:
+        data_power = sum([
+            np.trapz(abs(hdot[lm])**2, x=times) for lm in spherical_modes
+            ])
+    else:
+        data_power = sum([
+            np.trapz(abs(data_dict[lm])**2, x=times) for lm in spherical_modes
+            ])
     
     # (I) Begin with an empty list of modes
     modes = []
@@ -1767,7 +1841,10 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
     for i in range(Nmax):
         
         # (II) Form the residual, R, between the data and the model
-        R = {lm: data_dict[lm] - model[lm] for lm in spherical_modes}
+        if news:
+            R = {lm: hdot[lm] - model[lm] for lm in spherical_modes}
+        else:
+            R = {lm: data_dict[lm] - model[lm] for lm in spherical_modes}
         
         # (III) Compute the power in each mode of the residual
         P = {lm: np.trapz(abs(R[lm])**2, x=times) for lm in spherical_modes}
@@ -1826,5 +1903,8 @@ def greedy_fit(times, data_dict, Ftarget, Nmax, Mf, chif, t0, t0_method='geq',
         
         amplitudes = result['C']
         model = result['model']
+        
+        if news:
+            model_derivative = ringdown_derivative(times, t0, amplitudes, result[''])
         
     return modes, amplitudes, model
