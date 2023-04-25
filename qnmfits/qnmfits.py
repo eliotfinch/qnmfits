@@ -977,8 +977,9 @@ def plot_ringdown(times, data, xlim=[-50,100], best_fit=None,
         plt.close()
         
         
-def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None, 
-                        legend=True, outfile=None, fig_kw={}):
+def plot_ringdown_modes(best_fit, spherical_mode=None, plot_type='re', 
+                        xlim=None, ylim=None, legend=True, outfile=None, 
+                        fig_kw={}):
     """
     Plot the ringdown waveform from a least-squares fit, decomposed into its
     individual modes.
@@ -993,6 +994,10 @@ def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None,
     spherical_mode : tuple, optional
         A (l,m) tuple to specify which spherical harmonic mode to plot. The 
         default is None.
+        
+    plot_type : str, optional
+        Specify whether to plot the real ('re') or imaginary ('im') part of
+        the waveform. The default is 're'.
         
     xlim : array_like, optional
         The x-axis limits. The default is None.
@@ -1046,12 +1051,17 @@ def plot_ringdown_modes(best_fit, spherical_mode=None, xlim=None, ylim=None,
         else:
             alpha = 0.7
         
-        # Add the mode waveform to the figure. We just plot the real part for
-        # clarity.
-        ax.plot(best_fit['model_times'], np.real(mode_waveform), alpha=alpha)
+        # Add the mode waveform to the figure
+        if plot_type == 're':
+            ax.plot(best_fit['model_times'], np.real(mode_waveform), alpha=alpha)
+        elif plot_type == 'im':
+            ax.plot(best_fit['model_times'], np.imag(mode_waveform), alpha=alpha)
     
     # The overall sum
-    ax.plot(best_fit['model_times'], np.real(mode_sum), 'k--')
+    if plot_type == 're':
+        ax.plot(best_fit['model_times'], np.real(mode_sum), 'k--')
+    elif plot_type == 'im':
+        ax.plot(best_fit['model_times'], np.imag(mode_sum), 'k--')
     
     if xlim is not None:
         ax.set_xlim(xlim[0],xlim[1])
@@ -1704,7 +1714,7 @@ def free_frequency_fit(times, data, t0, modes=[], Mf=None, chif=None,
     
     # Other settings for the minimzation
     bounds = [(0,2), (-1,0)]
-    options = {'xatol':1e-6,'disp':False}
+    options = {'xatol':1e-8,'disp':False}
     
     def mismatch_f_tau(x, times, data, t0):
         """
