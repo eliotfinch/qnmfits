@@ -91,7 +91,7 @@ class SXS(BaseClass):
         self.level = self.highest_lev + self.lev_minus_highest
         
         # Now download the metadata for the requested level, if different from
-        # the requested level
+        # the highest level
         if self.highest_lev != self.level:
             self.metadata = sxs.load(
                 f'SXS:BBH:{self.ID}/Lev{self.level}/metadata.json')
