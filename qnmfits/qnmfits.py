@@ -1133,7 +1133,7 @@ def plot_mode_amplitudes(coefficients, labels, log=False, outfile=None,
             markevery=(1,2), linestyle=':')
     
     if log:
-        ax.set_xscale('log')
+        ax.set_yscale('log')
     
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
