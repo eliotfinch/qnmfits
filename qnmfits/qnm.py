@@ -3,6 +3,8 @@ import qnm as qnm_loader
 
 from scipy.interpolate import interp1d
 
+import os
+
 
 class qnm:
     """
@@ -22,6 +24,85 @@ class qnm:
         # Dictionary to store interpolated qnm functions for quicker 
         # evaluation
         self.interpolated_qnm_funcs = {}
+        
+
+        # The method used by the qnm package breaks down for the (2,2,8) mode.
+        # We load data for this mode separately, avaliable at 
+        # https://codeberg.org/GW_Ringdown/QNMdata
+        # See also
+        # https://arxiv.org/abs/2107.11829
+        
+        # The directory of this file (current working directory)
+        cwd = os.path.abspath(os.path.dirname(__file__))
+        
+        # Load data. The QNM frequency and angular separation constants are
+        # provided.
+        w228table = np.loadtxt(f'{cwd}/Data/w228table.dat')
+        new_spins, new_real_omega, new_imag_omega, real_A, imag_A = w228table.T
+        
+        # We use the qnm package mixing coefficients for now, but these also 
+        # have problems
+        default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 8)
+        
+        # Extract relevant quantities
+        spins = default_qnm_func.a
+        all_real_mu = np.real(default_qnm_func.C)
+        all_imag_mu = np.imag(default_qnm_func.C)
+
+        # Interpolate omegas
+        real_omega_interp = interp1d(
+            new_spins, new_real_omega, kind='cubic', bounds_error=False, 
+            fill_value=(new_real_omega[0],new_real_omega[-1]))
+        
+        imag_omega_interp = interp1d(
+            new_spins, new_imag_omega, kind='cubic', bounds_error=False, 
+            fill_value=(new_imag_omega[0],new_imag_omega[-1]))
+        
+        # Interpolate angular separation constants
+        real_A_interp = interp1d(
+            new_spins, real_A, kind='cubic', bounds_error=False, 
+            fill_value=(real_A[0],real_A[-1]))
+        
+        imag_A_interp = interp1d(
+            new_spins, imag_A, kind='cubic', bounds_error=False, 
+            fill_value=(imag_A[0],imag_A[-1]))
+        
+        # Interpolate mus
+        mu_interp = []
+        
+        for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
+            
+            real_mu_interp = interp1d(
+                    spins, real_mu, kind='cubic', bounds_error=False, 
+                    fill_value=(real_mu[0],real_mu[-1]))
+                
+            imag_mu_interp = interp1d(
+                spins, imag_mu, kind='cubic', bounds_error=False, 
+                fill_value=(imag_mu[0],imag_mu[-1]))
+            
+            mu_interp.append((real_mu_interp, imag_mu_interp))
+
+        # Add these interpolated functions to the frequency_funcs dictionary
+        self.interpolated_qnm_funcs[2,2,8] = [
+            (real_omega_interp, imag_omega_interp), mu_interp]
+        
+        # Add an entry to the qnm_funcs dictionary that mimics the qnm package
+        # behaviour
+        
+        def qnm_func_placeholder(chif, store=True):
+            
+            omega_interp = self.interpolated_qnm_funcs[2,2,8][0]
+            omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
+            
+            A = real_A_interp(chif) + 1j*imag_A_interp(chif)
+            
+            mu_interp = self.interpolated_qnm_funcs[2,2,8][1]
+            mu = [mu_interp_i[0](chif) + 1j*mu_interp_i[1](chif) for mu_interp_i in mu_interp]
+            
+            return omega, A, mu
+        
+        self.qnm_funcs[2,2,8] = qnm_func_placeholder
+        
         
     def interpolate(self, l, m, n):
         
