@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "qnmfits"
 version = "0.0.1"
 authors = [
-  { name="Eliot Finch", email="efinch@star.sr.bham.ac.uk" },
+  { name="Eliot Finch", email="efinch@caltech.edu" },
   { name="Christopher J. Moore", email="cmoore@star.sr.bham.ac.uk"},
 ]
 description = "Least-squares fitting of quasinormal modes to ringdown waveforms"
@@ -31,4 +31,4 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/EliotFinch/qnmfits"
+"Homepage" = "https://github.com/eliotfinch/qnmfits"
