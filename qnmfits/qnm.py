@@ -42,7 +42,10 @@ class qnm:
         
         # We use the qnm package mixing coefficients for now, but these also 
         # have problems
-        default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 8)
+        # default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 8)
+
+        # The above was failing, so use the n=7 data as a temporary fix
+        default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 7)
         
         # Extract relevant quantities
         spins = default_qnm_func.a
