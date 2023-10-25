@@ -1599,8 +1599,8 @@ def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None,
         ax.axvline(truth[1], color='w', alpha=0.3)
         
     if marker is not None:
-        # Mark a partiular mass-spin combination
-        ax.plot(marker[1], marker[1], marker='o', markersize=3, color='k')
+        # Mark a particular mass-spin combination
+        ax.plot(marker[0], marker[1], marker='o', markersize=3, color='k')
 
     # Color bar
     divider = make_axes_locatable(ax)
@@ -1622,7 +1622,7 @@ def free_frequency_fit(times, data, t0, modes=[], Mf=None, chif=None,
                        t0_method='geq', T=100, min_method='Nelder-Mead'):
     """
     Find the complex frequency that minimizes the mismatch for a given 
-    ringdown start time. a Set of "fixed" frequencies can also be included in 
+    ringdown start time. A set of "fixed" frequencies can also be included in 
     the fit, specified through the modes, Mf, and chif arguments.
 
     Parameters
@@ -1758,7 +1758,6 @@ def free_frequency_fit(times, data, t0, modes=[], Mf=None, chif=None,
     
     return omega_bestfit
     
-
 
 def rational_filter(times, data, modes, Mf, chif, t_start=-300, t_end=None, 
                     dt=None, t_taper=100, align_inspiral=True):
