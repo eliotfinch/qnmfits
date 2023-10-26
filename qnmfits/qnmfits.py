@@ -1363,8 +1363,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
             mm_list.append(best_fit['mismatch'])
 
     # Convert the list of mismatches to a grid
-    mm_grid = np.reshape(
-        np.array(mm_list), (len(Mf_array), len(chif_array)))
+    mm_grid = np.reshape(np.array(mm_list), (len(Mf_array), len(chif_array)))
     
     return mm_grid
 
@@ -1610,6 +1609,232 @@ def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None,
 
     ax.set_xlabel('$\chi_f$')
     ax.set_ylabel('$M_f\ [M]$')
+    
+    plt.tight_layout()
+    
+    if outfile is not None:
+        plt.savefig(outfile)
+        plt.close()
+
+
+def mismatch_omega_grid(times, data, modes, Mf, chif, re_minmax, im_minmax, t0, 
+                        t0_method='geq', T=100, res=50):
+    """
+    Calculate the mismatch for a grid of complex frequencies.
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be fitted.
+
+    data : array_like
+        The data to be fitted by the ringdown model.
+
+    modes : array_like
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in 
+        the ringdown model. For regular (positive real part) modes use 
+        sign=+1. For mirror (negative real part) modes use sign=-1. For 
+        nonlinear modes, the tuple has the form 
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
+
+    Mf : float
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
+    
+    chif : float
+        The magnitude of the remnant black hole spin. 
+    
+    re_minmax : tuple
+        The minimum and maximum values for the real part of the complex 
+        frequency to use in the grid.
+    
+    im_minmax : tuple
+        The minimum and maximum values for the imaginary part of the complex 
+        frequency to use in the grid.
+
+    t0 : float
+        The start time of the ringdown model.
+
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+
+        Options are:
+
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to 
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0, 
+                and take times from there.
+
+        The default is 'geq'.
+
+    T : float, optional
+        The duration of the data to analyse, such that the end time is t0 + T. 
+        The default is 100.
+
+    res : int, optional
+        The number of points used along each axis of the grid (so there are
+        res^2 evaluations of the mismatch). The default is 50.
+
+    Returns
+    -------
+    mm_grid : ndarray
+        The mismatch for each complex frequency.
+    """
+    # Create the real and imaginary omega arrays
+    re_array = np.linspace(re_minmax[0], re_minmax[1], res)
+    im_array = np.linspace(im_minmax[0], im_minmax[1], res)
+
+    # List to store the mismatch from each complex frequency
+    mm_list = []
+    
+    for i in tqdm(range(len(re_array)*len(im_array))):
+
+        re = re_array[int(i/len(re_array))]
+        im = im_array[i%len(im_array)]
+
+        # Mask the data with the requested method
+        if t0_method == 'geq':
+            
+            data_mask = (times>=t0) & (times<t0+T)
+            
+            times = times[data_mask]
+            data = data[data_mask]
+            
+        elif t0_method == 'closest':
+            
+            start_index = np.argmin((times-t0)**2)
+            end_index = np.argmin((times-t0-T)**2)
+            
+            times = times[start_index:end_index]
+            data = data[start_index:end_index]
+            
+        else:
+            print("""Requested t0_method is not valid. Please choose between 
+                  'geq' and 'closest'""")
+        
+        # Frequencies
+        # -----------
+        
+        frequencies = np.array(qnm.omega_list(modes, chif, Mf) + [re+1j*im])
+            
+        # Construct coefficient matrix and solve
+        # --------------------------------------
+        
+        # Construct the coefficient matrix
+        a = np.array([
+            np.exp(-1j*frequencies[i]*(times-t0)) for i in range(len(frequencies))
+            ]).T
+
+        # Solve for the complex amplitudes, C. Also returns the sum of 
+        # residuals, the rank of a, and singular values of a.
+        C, res, rank, s = np.linalg.lstsq(a, data, rcond=None)
+        
+        # Evaluate the model
+        model = np.einsum('ij,j->i', a, C)
+        
+        # Calculate the mismatch for the fit
+        mm = mismatch(times, model, data)
+        
+        # Create a list of mode labels (can be used for plotting)
+        labels = [str(mode) for mode in modes]
+        
+        # Store all useful information to a output dictionary
+        best_fit = {
+            'residual': res,
+            'mismatch': mm,
+            'C': C,
+            'data': data,
+            'model': model,
+            'model_times': times,
+            't0': t0,
+            'modes': modes,
+            'mode_labels': labels,
+            'frequencies': frequencies
+            }
+    
+        mm_list.append(best_fit['mismatch'])
+
+    # Convert the list of mismatches to a grid
+    mm_grid = np.reshape(np.array(mm_list), (len(re_array), len(im_array))).T
+    
+    return mm_grid
+
+
+def plot_mismatch_omega_grid(mm_grid, re_minmax, im_minmax, truth=None, 
+                             marker=None, outfile=None, fig_kw={}):
+    """
+    Helper function to plot the mismatch grid (from a call of the
+    mismatch_omega_grid) as a heatmap with a colorbar.
+
+    Parameters
+    ----------
+    mm_grid : array_like
+        A 2D array of mismatches in complex-frequency space.
+
+    re_minmax : tuple
+        The minimum and maximum values of the real part of the complex 
+        frequency used in the grid.
+
+    im_minmax : tuple
+        The minimum and maximum values of the imaginary part of the complex 
+        frequency used in the grid.
+
+    truth : tuple, optional
+        A tuple of the form (re_true, im_true) to indicate the true
+        complex frequency on the heatmap. If None, nothing is plotted. The
+        default is None.
+
+    marker : tuple, optional
+        A tuple of the form (re, im) to indicate a particular complex 
+        frequency. If None, nothing is plotted. The default is None.
+
+    outfile : str, optional
+        File name/path to save the figure. If None, the figure is not saved. 
+        The default is None.
+
+    fig_kw : dict, optional
+        Additional keyword arguments to pass to plt.subplots() at the figure
+        creation. The default is {}.
+    """
+    re_min, re_max = re_minmax
+    im_min, im_max = im_minmax
+    
+    fig, ax = plt.subplots(**fig_kw)
+    
+    # Plot heatmap
+    im = ax.imshow(
+        np.log10(mm_grid), 
+        extent=[re_min,re_max,im_min,im_max],
+        aspect='auto',
+        origin='lower',
+        interpolation='bicubic',
+        cmap='gist_heat_r')
+
+    if truth is not None:
+        # Indicate true values
+        ax.axhline(truth[0], color='w', alpha=0.3)
+        ax.axvline(truth[1], color='w', alpha=0.3)
+        
+    if marker is not None:
+        # Mark a partiular mass-spin combination
+        ax.plot(marker[0], marker[1], marker='o', markersize=3, color='k')
+
+    # Color bar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.set_ylabel('$\mathrm{log}_{10}\ \mathcal{M}$')
+
+    ax.set_xlabel('$\mathrm{Re}[\omega]$')
+    ax.set_ylabel('$\mathrm{Im}[\omega]$')
     
     plt.tight_layout()
     
