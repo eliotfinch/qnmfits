@@ -1,3 +1,6 @@
+# Private CCE data
+SXS:BBH_ExtCCE_superrest:0305*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
