@@ -7,7 +7,7 @@ The package can be installed with `pip install .` - this assumes you are in the 
 
 Note that when first importing the package, there may be a short delay.
 
-You may prefer to install the dependencies via `conda` - please see the dependencies in the `pyproject.toml` file. All packages are available on `conda` or `conda-forge`. You may additionally need to install `spinfast` via
+You may prefer to install the dependencies via `conda` - please see the dependencies in the `pyproject.toml` file. All packages are available on `conda` or `conda-forge`. You may additionally need to install `spinsfast` via
 
 ```bash
 conda install --channel conda-forge spinsfast
