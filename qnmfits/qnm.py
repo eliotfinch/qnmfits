@@ -57,13 +57,21 @@ class qnm:
 
         data_dir = Path(__file__).parent / 'Data'
 
-        # Keep track of what data has been downloaded (useful for warnings)
+        # Dictionary to store the mode data, using our preferred labelling 
+        # convention
+        multiplet_data = {}
+
+        # A list of multiplet modes
+        self.multiplet_list = []
+
         self.download_check = {}
+
         for n in [8,9]:
+
+            # Keep track of what data has been downloaded (useful for warnings)
             file_path = data_dir / f'KerrQNM_{n:02}.h5'
             self.download_check[n] = file_path.exists()
 
-        for n in [8,9]:
             if self.download_check[n]:
                 file_path = data_dir / f'KerrQNM_{n:02}.h5'
                 with h5py.File(file_path, 'r') as f:
@@ -74,89 +82,75 @@ class qnm:
                                 # If there are four indices for this mode, then
                                 # we have a "multiplet". We use the convention
                                 # of labelling this as two different overtones.
-                                print(m_key)
-                                print(mode_key_split)
-        
+                                l = int(mode_key_split[0])
+                                m = int(mode_key_split[1])
+                                n_label = mode_key_split[2] + mode_key_split[3]
 
-        # The method used by the qnm package breaks down for the (2,2,8) mode.
-        # We load data for this mode separately, avaliable at 
-        # https://codeberg.org/GW_Ringdown/QNMdata
-        # See also
-        # https://arxiv.org/abs/2107.11829
-        
-        # The directory of this file (current working directory)
-        cwd = os.path.abspath(os.path.dirname(__file__))
-        
-        # Load data. The QNM frequency and angular separation constants are
-        # provided.
-        w228table = np.loadtxt(f'{cwd}/Data/w228table.dat')
-        new_spins, new_real_omega, new_imag_omega, real_A, imag_A = w228table.T
-        
-        # We use the qnm package mixing coefficients for now, but these also 
-        # have problems
-        # default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 8)
+                                if (l,m,n) not in self.multiplet_list:
+                                    self.multiplet_list.append((l,m,n))
 
-        # The above was failing, so use the n=7 data as a temporary fix
-        default_qnm_func = qnm_loader.modes_cache(-2, 2, 2, 7)
-        
-        # Extract relevant quantities
-        spins = default_qnm_func.a
-        all_real_mu = np.real(default_qnm_func.C)
-        all_imag_mu = np.imag(default_qnm_func.C)
+                                multiplet_data[(l,m,n_label)] = np.array(f[f'n{n:02}'][m_key][mode_key])
 
-        # Interpolate omegas
-        real_omega_interp = UnivariateSpline(
-            new_spins, new_real_omega, kind='cubic', bounds_error=False, 
-            fill_value=(new_real_omega[0],new_real_omega[-1]))
+        for key, data in multiplet_data.items():
         
-        imag_omega_interp = UnivariateSpline(
-            new_spins, new_imag_omega, kind='cubic', bounds_error=False, 
-            fill_value=(new_imag_omega[0],new_imag_omega[-1]))
-        
-        # Interpolate angular separation constants
-        real_A_interp = UnivariateSpline(
-            new_spins, real_A, kind='cubic', bounds_error=False, 
-            fill_value=(real_A[0],real_A[-1]))
-        
-        imag_A_interp = UnivariateSpline(
-            new_spins, imag_A, kind='cubic', bounds_error=False, 
-            fill_value=(imag_A[0],imag_A[-1]))
-        
-        # Interpolate mus
-        mu_interp = []
-        
-        for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
+            # Extract relevant quantities
+            spins = data[:,0]
+            real_omega = data[:,1]
+            imag_omega = data[:,2]
+            real_A = data[:,3]
+            imag_A = data[:,4]
+            real_mu = data[:,5::2]
+            imag_mu = data[:,6::2]
+
+            # Interpolate omegas
+            real_omega_interp = UnivariateSpline(
+                spins, real_omega, s=0
+                )
             
-            real_mu_interp = UnivariateSpline(
-                    spins, real_mu, kind='cubic', bounds_error=False, 
-                    fill_value=(real_mu[0],real_mu[-1]))
+            imag_omega_interp = UnivariateSpline(
+                spins, imag_omega, s=0
+                )
+            
+            # Interpolate angular separation constants
+            real_A_interp = UnivariateSpline(
+                spins, real_A, s=0             )
+            
+            imag_A_interp = UnivariateSpline(
+                spins, imag_A, s=0             )
+            
+            # Interpolate mus
+            mu_interp = []
+            
+            for real_mu, imag_mu in zip(real_mu.T, imag_mu.T):
                 
-            imag_mu_interp = UnivariateSpline(
-                spins, imag_mu, kind='cubic', bounds_error=False, 
-                fill_value=(imag_mu[0],imag_mu[-1]))
-            
-            mu_interp.append((real_mu_interp, imag_mu_interp))
+                real_mu_interp = UnivariateSpline(
+                    spins, real_mu, s=0                  )
+                    
+                imag_mu_interp = UnivariateSpline(
+                    spins, imag_mu, s=0                  )
+                
+                mu_interp.append((real_mu_interp, imag_mu_interp))
 
-        # Add these interpolated functions to the frequency_funcs dictionary
-        self.interpolated_qnm_funcs[2,2,8] = [
-            (real_omega_interp, imag_omega_interp), mu_interp]
-        
-        # Add an entry to the qnm_funcs dictionary that mimics the qnm package
-        # behaviour
-        
-        def qnm_func_placeholder(chif, store=True):
+            # Add these interpolated functions to the frequency_funcs dictionary
+            self.interpolated_qnm_funcs[key] = [
+                (real_omega_interp, imag_omega_interp), mu_interp]
             
-            omega_interp = self.interpolated_qnm_funcs[2,2,8][0]
-            omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
+            # Add an entry to the qnm_funcs dictionary that mimics the qnm package
+            # behaviour
             
-            A = real_A_interp(chif) + 1j*imag_A_interp(chif)
+            def qnm_func_placeholder(chif, store=True):
+                
+                omega_interp = self.interpolated_qnm_funcs[key][0]
+                omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
+                
+                A = real_A_interp(chif) + 1j*imag_A_interp(chif)
+                
+                mu_interp = self.interpolated_qnm_funcs[key][1]
+                mu = [mu_interp_i[0](chif) + 1j*mu_interp_i[1](chif) for mu_interp_i in mu_interp]
+                
+                return omega, A, mu
             
-            mu_interp = self.interpolated_qnm_funcs[2,2,8][1]
-            mu = [mu_interp_i[0](chif) + 1j*mu_interp_i[1](chif) for mu_interp_i in mu_interp]
-            
-            return omega, A, mu
-        
-        self.qnm_funcs[2,2,8] = qnm_func_placeholder
+            self.qnm_funcs[key] = qnm_func_placeholder
         
         
     def interpolate(self, l, m, n):
@@ -172,12 +166,12 @@ class qnm:
 
         # Interpolate omegas
         real_omega_interp = UnivariateSpline(
-            spins, real_omega, kind='cubic', bounds_error=False, 
-            fill_value=(real_omega[0],real_omega[-1]))
+            spins, real_omega, s=0
+            )
         
         imag_omega_interp = UnivariateSpline(
-            spins, imag_omega, kind='cubic', bounds_error=False, 
-            fill_value=(imag_omega[0],imag_omega[-1]))
+            spins, imag_omega, s=0
+            )
         
         # Interpolate mus
         mu_interp = []
@@ -185,12 +179,12 @@ class qnm:
         for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
             
             real_mu_interp = UnivariateSpline(
-                    spins, real_mu, kind='cubic', bounds_error=False, 
-                    fill_value=(real_mu[0],real_mu[-1]))
+                    spins, real_mu, s=0
+                    )
                 
             imag_mu_interp = UnivariateSpline(
-                spins, imag_mu, kind='cubic', bounds_error=False, 
-                fill_value=(imag_mu[0],imag_mu[-1]))
+                spins, imag_mu, s=0
+                )
             
             mu_interp.append((real_mu_interp, imag_mu_interp))
 
