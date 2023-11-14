@@ -1,6 +1,9 @@
 # Private CCE data
 SXS:BBH_ExtCCE_superrest:0305*
 
+# Cook QNM data
+qnmfits/Data/KerrQNM*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
