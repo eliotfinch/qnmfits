@@ -1,9 +1,34 @@
 import numpy as np
 import qnm as qnm_loader
 
-from scipy.interpolate import interp1d
+from scipy.interpolate import UnivariateSpline
+from pathlib import Path
+from urllib.request import urlretrieve
 
 import os
+import h5py
+
+
+def download_cook_data():
+    """
+    Download data for the n=8 and n=9 QNMs from 
+    https://zenodo.org/records/10093311, and store in the qnmfits/Data
+    directory.
+    """
+
+    data_dir = Path(__file__).parent / 'Data'
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for n in [8,9]:
+
+        download_url = f'https://zenodo.org/records/10093311/files/KerrQNM_{n:02}.h5?download=1'
+        file_path = data_dir / f'KerrQNM_{n:02}.h5'
+
+        if not file_path.exists():
+            print(f'Downloading KerrQNM_{n:02}.h5...')
+            urlretrieve(download_url, file_path)
+        else:
+            print(f'KerrQNM_{n:02}.h5 already downloaded.')
 
 
 class qnm:
@@ -24,6 +49,33 @@ class qnm:
         # Dictionary to store interpolated qnm functions for quicker 
         # evaluation
         self.interpolated_qnm_funcs = {}
+
+        # The method used by the qnm package breaks down for certain modes that
+        # approach the imaginary axis (perhaps most notably, the (2,2,8) mode).
+        # We load data for these modes separately, computed by Cook & 
+        # Zalutskiy.
+
+        data_dir = Path(__file__).parent / 'Data'
+
+        # Keep track of what data has been downloaded (useful for warnings)
+        self.download_check = {}
+        for n in [8,9]:
+            file_path = data_dir / f'KerrQNM_{n:02}.h5'
+            self.download_check[n] = file_path.exists()
+
+        for n in [8,9]:
+            if self.download_check[n]:
+                file_path = data_dir / f'KerrQNM_{n:02}.h5'
+                with h5py.File(file_path, 'r') as f:
+                    for m_key in f[f'n{n:02}'].keys():
+                        for mode_key in f[f'n{n:02}'][m_key].keys():
+                            mode_key_split = [element.strip('{}') for element in mode_key.split(',')]
+                            if len(mode_key_split) == 4:
+                                # If there are four indices for this mode, then
+                                # we have a "multiplet". We use the convention
+                                # of labelling this as two different overtones.
+                                print(m_key)
+                                print(mode_key_split)
         
 
         # The method used by the qnm package breaks down for the (2,2,8) mode.
@@ -53,20 +105,20 @@ class qnm:
         all_imag_mu = np.imag(default_qnm_func.C)
 
         # Interpolate omegas
-        real_omega_interp = interp1d(
+        real_omega_interp = UnivariateSpline(
             new_spins, new_real_omega, kind='cubic', bounds_error=False, 
             fill_value=(new_real_omega[0],new_real_omega[-1]))
         
-        imag_omega_interp = interp1d(
+        imag_omega_interp = UnivariateSpline(
             new_spins, new_imag_omega, kind='cubic', bounds_error=False, 
             fill_value=(new_imag_omega[0],new_imag_omega[-1]))
         
         # Interpolate angular separation constants
-        real_A_interp = interp1d(
+        real_A_interp = UnivariateSpline(
             new_spins, real_A, kind='cubic', bounds_error=False, 
             fill_value=(real_A[0],real_A[-1]))
         
-        imag_A_interp = interp1d(
+        imag_A_interp = UnivariateSpline(
             new_spins, imag_A, kind='cubic', bounds_error=False, 
             fill_value=(imag_A[0],imag_A[-1]))
         
@@ -75,11 +127,11 @@ class qnm:
         
         for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
             
-            real_mu_interp = interp1d(
+            real_mu_interp = UnivariateSpline(
                     spins, real_mu, kind='cubic', bounds_error=False, 
                     fill_value=(real_mu[0],real_mu[-1]))
                 
-            imag_mu_interp = interp1d(
+            imag_mu_interp = UnivariateSpline(
                 spins, imag_mu, kind='cubic', bounds_error=False, 
                 fill_value=(imag_mu[0],imag_mu[-1]))
             
@@ -119,11 +171,11 @@ class qnm:
         all_imag_mu = np.imag(qnm_func.C)
 
         # Interpolate omegas
-        real_omega_interp = interp1d(
+        real_omega_interp = UnivariateSpline(
             spins, real_omega, kind='cubic', bounds_error=False, 
             fill_value=(real_omega[0],real_omega[-1]))
         
-        imag_omega_interp = interp1d(
+        imag_omega_interp = UnivariateSpline(
             spins, imag_omega, kind='cubic', bounds_error=False, 
             fill_value=(imag_omega[0],imag_omega[-1]))
         
@@ -132,11 +184,11 @@ class qnm:
         
         for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
             
-            real_mu_interp = interp1d(
+            real_mu_interp = UnivariateSpline(
                     spins, real_mu, kind='cubic', bounds_error=False, 
                     fill_value=(real_mu[0],real_mu[-1]))
                 
-            imag_mu_interp = interp1d(
+            imag_mu_interp = UnivariateSpline(
                 spins, imag_mu, kind='cubic', bounds_error=False, 
                 fill_value=(imag_mu[0],imag_mu[-1]))
             
