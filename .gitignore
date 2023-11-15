@@ -4,6 +4,12 @@ SXS:BBH_ExtCCE_superrest:0305*
 # Cook QNM data
 qnmfits/Data/KerrQNM*
 
+# Berti QNM data
+qnmfits/Data/s2l2.dat
+
+# Test notebooks
+cook_data.ipynb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
