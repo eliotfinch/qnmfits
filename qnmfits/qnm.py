@@ -5,7 +5,6 @@ from scipy.interpolate import UnivariateSpline
 from pathlib import Path
 from urllib.request import urlretrieve
 
-import os
 import h5py
 
 
@@ -44,11 +43,11 @@ class qnm:
         """
         
         # Dictionary to store the qnm functions
-        self.qnm_funcs = {}
+        self._qnm_funcs = {}
         
         # Dictionary to store interpolated qnm functions for quicker 
         # evaluation
-        self.interpolated_qnm_funcs = {}
+        self._interpolated_qnm_funcs = {}
 
         # The method used by the qnm package breaks down for certain modes that
         # approach the imaginary axis (perhaps most notably, the (2,2,8) mode).
@@ -61,35 +60,28 @@ class qnm:
         # convention
         multiplet_data = {}
 
-        # A list of multiplet modes
-        self.multiplet_list = []
+        # A list of known multiplets
+        self.multiplet_list = [(2,0,8),(2,1,8),(2,2,8)]
 
+        # Keep track of what data has been downloaded (useful for warnings)
         self.download_check = {}
 
-        for n in [8,9]:
+        for l, m, n in self.multiplet_list:
 
-            # Keep track of what data has been downloaded (useful for warnings)
             file_path = data_dir / f'KerrQNM_{n:02}.h5'
             self.download_check[n] = file_path.exists()
-
             if self.download_check[n]:
-                file_path = data_dir / f'KerrQNM_{n:02}.h5'
+
+                # Open file
                 with h5py.File(file_path, 'r') as f:
-                    for m_key in f[f'n{n:02}'].keys():
-                        for mode_key in f[f'n{n:02}'][m_key].keys():
-                            mode_key_split = [element.strip('{}') for element in mode_key.split(',')]
-                            if len(mode_key_split) == 4:
-                                # If there are four indices for this mode, then
-                                # we have a "multiplet". We use the convention
-                                # of labelling this as two different overtones.
-                                l = int(mode_key_split[0])
-                                m = int(mode_key_split[1])
-                                n_label = mode_key_split[2] + mode_key_split[3]
 
-                                if (l,m,n) not in self.multiplet_list:
-                                    self.multiplet_list.append((l,m,n))
-
-                                multiplet_data[(l,m,n_label)] = np.array(f[f'n{n:02}'][m_key][mode_key])
+                    # Read data for each multiplet, and store in the 
+                    # multiplet_data dictionary with the preferred labelling
+                    # convention
+                    for i in [0,1]:
+                        multiplet_data[(l,m,n+i)] = np.array(
+                            f[f'n{n:02}/m{m:+03}/{{{l},{m},{{{n},{i}}}}}']
+                            )
 
         for key, data in multiplet_data.items():
         
@@ -99,63 +91,43 @@ class qnm:
             imag_omega = data[:,2]
             real_A = data[:,3]
             imag_A = data[:,4]
-            real_mu = data[:,5::2]
-            imag_mu = data[:,6::2]
+            all_real_mu = data[:,5::2]
+            all_imag_mu = data[:,6::2]
 
             # Interpolate omegas
-            real_omega_interp = UnivariateSpline(
-                spins, real_omega, s=0
-                )
-            
-            imag_omega_interp = UnivariateSpline(
-                spins, imag_omega, s=0
-                )
+            real_omega_interp = UnivariateSpline(spins, real_omega, s=0)
+            imag_omega_interp = UnivariateSpline(spins, imag_omega, s=0)
             
             # Interpolate angular separation constants
-            real_A_interp = UnivariateSpline(
-                spins, real_A, s=0             )
-            
-            imag_A_interp = UnivariateSpline(
-                spins, imag_A, s=0             )
+            real_A_interp = UnivariateSpline(spins, real_A, s=0)
+            imag_A_interp = UnivariateSpline(spins, imag_A, s=0)
             
             # Interpolate mus
             mu_interp = []
             
-            for real_mu, imag_mu in zip(real_mu.T, imag_mu.T):
+            for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
                 
-                real_mu_interp = UnivariateSpline(
-                    spins, real_mu, s=0                  )
-                    
-                imag_mu_interp = UnivariateSpline(
-                    spins, imag_mu, s=0                  )
+                real_mu_interp = UnivariateSpline(spins, real_mu, s=0)
+                imag_mu_interp = UnivariateSpline(spins, imag_mu, s=0)
                 
                 mu_interp.append((real_mu_interp, imag_mu_interp))
 
             # Add these interpolated functions to the frequency_funcs dictionary
-            self.interpolated_qnm_funcs[key] = [
-                (real_omega_interp, imag_omega_interp), mu_interp]
-            
-            # Add an entry to the qnm_funcs dictionary that mimics the qnm package
-            # behaviour
-            
-            def qnm_func_placeholder(chif, store=True):
-                
-                omega_interp = self.interpolated_qnm_funcs[key][0]
-                omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
-                
-                A = real_A_interp(chif) + 1j*imag_A_interp(chif)
-                
-                mu_interp = self.interpolated_qnm_funcs[key][1]
-                mu = [mu_interp_i[0](chif) + 1j*mu_interp_i[1](chif) for mu_interp_i in mu_interp]
-                
-                return omega, A, mu
-            
-            self.qnm_funcs[key] = qnm_func_placeholder
+            self._interpolated_qnm_funcs[key] = [
+                (real_omega_interp, imag_omega_interp), mu_interp
+                ]
         
-        
-    def interpolate(self, l, m, n):
-        
-        qnm_func = self.qnm_funcs[l,m,n]
+    def _interpolate(self, l, m, n):
+
+        # If there is a known multiplet with the same l and m, we need to
+        # be careful with the n index
+        n_load = n
+        for lp, mp, nprime in self.multiplet_list:
+            if (l == lp) & (m == mp):
+                if n > nprime+1:
+                    n_load -= 1
+
+        qnm_func = qnm_loader.modes_cache(-2, l, m, n_load)
         
         # Extract relevant quantities
         spins = qnm_func.a
@@ -165,32 +137,23 @@ class qnm:
         all_imag_mu = np.imag(qnm_func.C)
 
         # Interpolate omegas
-        real_omega_interp = UnivariateSpline(
-            spins, real_omega, s=0
-            )
-        
-        imag_omega_interp = UnivariateSpline(
-            spins, imag_omega, s=0
-            )
+        real_omega_interp = UnivariateSpline(spins, real_omega, s=0)
+        imag_omega_interp = UnivariateSpline(spins, imag_omega, s=0)
         
         # Interpolate mus
         mu_interp = []
         
         for real_mu, imag_mu in zip(all_real_mu.T, all_imag_mu.T):
             
-            real_mu_interp = UnivariateSpline(
-                    spins, real_mu, s=0
-                    )
-                
-            imag_mu_interp = UnivariateSpline(
-                spins, imag_mu, s=0
-                )
+            real_mu_interp = UnivariateSpline(spins, real_mu, s=0)
+            imag_mu_interp = UnivariateSpline(spins, imag_mu, s=0)
             
             mu_interp.append((real_mu_interp, imag_mu_interp))
 
         # Add these interpolated functions to the frequency_funcs dictionary
-        self.interpolated_qnm_funcs[l,m,n] = [
-            (real_omega_interp, imag_omega_interp), mu_interp]
+        self._interpolated_qnm_funcs[l,m,n] = [
+            (real_omega_interp, imag_omega_interp), mu_interp
+            ]
         
     def omega(self, l, m, n, sign, chif, Mf=1):
         """
@@ -248,23 +211,15 @@ class qnm:
         """
         # Load the correct qnm based on the type we want
         m *= sign
-        
-        # Test if the qnm function has been loaded for the requested mode
-        if (l,m,n) not in self.qnm_funcs:
-            self.qnm_funcs[l,m,n] = qnm_loader.modes_cache(-2, l, m, n)
             
-        if type(chif) in [float, np.float64]:
-            omega, A, mu = self.qnm_funcs[l,m,n](chif, store=True)
+        # Test if the interpolated qnm function has been created (we create 
+        # our own interpolant so that we can evaluate the frequencies for 
+        # all spins simultaneously)
+        if (l,m,n) not in self._interpolated_qnm_funcs:
+            self._interpolate(l,m,n)
             
-        else:
-            # Test if the interpolated qnm function has been created (we create 
-            # our own interpolant so that we can evaluate the frequencies for 
-            # all spins simultaneously)
-            if (l,m,n) not in self.interpolated_qnm_funcs:
-                self.interpolate(l,m,n)
-                
-            omega_interp = self.interpolated_qnm_funcs[l,m,n][0]
-            omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
+        omega_interp = self._interpolated_qnm_funcs[l,m,n][0]
+        omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
             
         # Use symmetry properties to get the mirror mode, if requested
         if sign == -1:
@@ -374,27 +329,12 @@ class qnm:
             index = l - abs(m)
         else:
             index = l - 2
-        
-        # Test if the qnm function has been loaded for the requested mode
-        if (lp,mp,nprime) not in self.qnm_funcs:
-            self.qnm_funcs[lp,mp,nprime] = qnm_loader.modes_cache(
-                -2, lp, mp, nprime)
             
-        if type(chif) in [float, np.float64]:
+        if (lp,mp,nprime) not in self._interpolated_qnm_funcs:
+            self._interpolate(lp,mp,nprime)
             
-            # Access the relevant functions from the qnm_funcs dictionary, and 
-            # evaluate at the requested spin. Storing speeds up future 
-            # evaluations.
-            omega, A, mu = self.qnm_funcs[lp,mp,nprime](chif, store=True)
-            mu = mu[index]
-            
-        else:
-            
-            if (lp,mp,nprime) not in self.interpolated_qnm_funcs:
-                self.interpolate(lp,mp,nprime)
-                
-            mu_interp = self.interpolated_qnm_funcs[lp,mp,nprime][1][index]
-            mu = mu_interp[0](chif) + 1j*mu_interp[1](chif)
+        mu_interp = self._interpolated_qnm_funcs[lp,mp,nprime][1][index]
+        mu = mu_interp[0](chif) + 1j*mu_interp[1](chif)
             
         # Use symmetry properties to get the mirror mixing coefficient, if 
         # requested
