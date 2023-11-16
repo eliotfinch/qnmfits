@@ -31,4 +31,4 @@ If you want use QNMs with an overtone index `n>7`, then you will encounter QNM "
 
 ![QNM multiplet taxonomy](examples/qnm_multiplet_taxonomy.png)
 
-This has led to these two branches being labelled as (2,2,8<sub>0</sub>) and (2,2,8<sub>1</sub>) by Cook & Zalutskiy ([arxiv:1607.07406](http://arxiv.org/abs/1607.07406)). However, from a practical perspective we will be mostly working with Kerr black holes, and these two branches behave as a `n=8` and `n=9` overtone. So, as indicated by the figure above, we label them as such (this follows the convention of 
+This has led to these two branches being labelled as (2,2,8<sub>0</sub>) and (2,2,8<sub>1</sub>) by Cook & Zalutskiy ([arxiv:1607.07406](http://arxiv.org/abs/1607.07406)). However, from a practical perspective we will be mostly working with Kerr black holes, and these two branches behave as a `n=8` and `n=9` overtone. So, as indicated by the figure above, we label them as such (this follows the convention of Forteza & Mourier ([arXiv:2107.11829](http://arxiv.org/abs/2107.11829)).
