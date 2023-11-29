@@ -27,8 +27,15 @@ In this package QNMs are specified with four numbers: `(ell, m, n, sign)`. The f
 
 ![QNM taxonomy](examples/qnm_taxonomy.png)
 
-If you want use QNMs with an overtone index `n>7`, then you will encounter QNM "multiplets" for which there are different labelling conventions. For example, the Schwarzschild (2,2,8) QNM has the behaviour of "splitting" into two branches when the spin is increased:
+If you want use QNMs with an overtone index `n>7`, then you will need to download extra data by calling the `download_cook_data()` function:
+
+```python
+import qnmfits
+qnmfits.download_cook_data()
+```
+
+ The reason for this is because for `n>7` we encounter QNM "multiplets" which the `qnm` package has trouble handling. Note that there are different labelling conventions for these multiplets. For example, the Schwarzschild (2,2,8) QNM has the behaviour of "splitting" into two branches when the spin is increased:
 
 ![QNM multiplet taxonomy](examples/qnm_multiplet_taxonomy.png)
 
-This has led to these two branches being labelled as (2,2,8<sub>0</sub>) and (2,2,8<sub>1</sub>) by Cook & Zalutskiy ([arxiv:1607.07406](http://arxiv.org/abs/1607.07406)). However, from a practical perspective we will be mostly working with Kerr black holes, and these two branches behave as a `n=8` and `n=9` overtone. So, as indicated by the figure above, we label them as such (this follows the convention of Forteza & Mourier ([arXiv:2107.11829](http://arxiv.org/abs/2107.11829)).
+This has led to these two branches being labelled as (2,2,8<sub>0</sub>) and (2,2,8<sub>1</sub>) by Cook & Zalutskiy ([arxiv:1607.07406](http://arxiv.org/abs/1607.07406)). However, from a practical perspective we will be mostly working with Kerr black holes, and these two branches behave as a `n=8` and `n=9` overtone. So, as indicated by the figure above, we label them as such (this follows the convention of Forteza & Mourier ([arXiv:2107.11829](http://arxiv.org/abs/2107.11829))).
