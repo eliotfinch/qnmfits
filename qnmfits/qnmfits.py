@@ -255,9 +255,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta
     # If delta is a float or array of appropriate length, sets delta factor
     if (type(delta) is np.array and len(delta)==len(modes)) or type(delta) is float:
         delta_factor= delta+1
-        print("delta must be a float or an array with length len(modes)")
-        delta = 
-    if not ((type(delta) is float) or (type(delta) is np.array and len(delta)==len(modes))):
+    
+    else:
         print("delta must be a float or an array with length len(modes)")
 
 
