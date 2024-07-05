@@ -137,7 +137,7 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
     return 1 - (numerator/denominator)
 
 
-def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
+def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta = 0):
     """
     Perform a least-squares fit to some data using a ringdown model.
 
@@ -189,6 +189,12 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
     T : float, optional
         The duration of the data to analyse, such that the end time is t0 + T. 
         The default is 100.
+    
+    delta : float or array_like (optional)
+        Modify the frequencies used in the ringdown fit. Either a
+        constant value to modify every overtone frequency identically, or 
+        an array with different values for each overtone.  Default is 0 
+        (no modification).
 
     Returns
     -------
@@ -240,8 +246,23 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100):
     
     # Frequencies
     # -----------
+
+    # Checking input for delta
+    # If delta is list of appropriate length, converts it to np.array
+    if type(delta) is list and len(delta)==len(modes):
+        delta=np.array(delta)
     
-    frequencies = np.array(qnm.omega_list(modes, chif, Mf))
+    # If delta is a float or array of appropriate length, sets delta factor
+    if (type(delta) is np.array and len(delta)==len(modes)) or type(delta) is float:
+        delta_factor= delta+1
+        print("delta must be a float or an array with length len(modes)")
+        delta = 
+    if not ((type(delta) is float) or (type(delta) is np.array and len(delta)==len(modes))):
+        print("delta must be a float or an array with length len(modes)")
+
+
+    # Multiply frequencies by delta_factor = delta + 1
+    frequencies = delta_factor*np.array(qnm.omega_list(modes, chif, Mf))
         
     # Construct coefficient matrix and solve
     # --------------------------------------
