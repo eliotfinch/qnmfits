@@ -250,6 +250,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta
     # Checking input for delta
 
     # If delta is list of appropriate length, convert it to np.array
+    if type(delta) is int:
+        delta = float(delta)
     if type(delta) is list and len(delta)==len(modes):
         delta=np.array(delta)
     
@@ -1290,7 +1292,7 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq',
 
 
 def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0, 
-                        t0_method='geq', T=100, res=50, spherical_modes=None, delta =0):
+                        t0_method='geq', T=100, res=50, spherical_modes=None, delta =0.0):
     """
     Calculate the mismatch for a grid of Mf and chif values.
 
