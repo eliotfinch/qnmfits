@@ -248,7 +248,8 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta
     # -----------
 
     # Checking input for delta
-    # If delta is list of appropriate length, converts it to np.array
+
+    # If delta is list of appropriate length, convert it to np.array
     if type(delta) is list and len(delta)==len(modes):
         delta=np.array(delta)
     
@@ -1559,7 +1560,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
         res = minimize(
             mismatch_M_chi, 
             x0,
-            args=(times, data, modes, t0, t0_method, T),
+            args=(times, data, modes, t0, t0_method, T, delta),
             method=min_method, 
             bounds=bounds, 
             options=options
