@@ -252,11 +252,13 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta
     # If delta is list of appropriate length, convert it to np.array
     if type(delta) is int:
         delta = float(delta)
+
     if type(delta) is list and len(delta)==len(modes):
         delta=np.array(delta)
+        delta_factor=delta+1
     
     # If delta is a float or array of appropriate length, sets delta factor
-    if (type(delta) is np.array and len(delta)==len(modes)) or type(delta) is float:
+    if (isinstance(delta, np.ndarray) and len(delta)==len(modes)) or type(delta) is float:
         delta_factor= delta+1
     
     else:
