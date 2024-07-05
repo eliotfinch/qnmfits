@@ -137,7 +137,7 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
     return 1 - (numerator/denominator)
 
 
-def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta = 0):
+def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, delta = 0.0):
     """
     Perform a least-squares fit to some data using a ringdown model.
 
@@ -1169,7 +1169,7 @@ def plot_mode_amplitudes(coefficients, labels, log=False, outfile=None,
 
 
 def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq', 
-                      T_array=100, spherical_modes=None, delta=0):
+                      T_array=100, spherical_modes=None, delta=0.0):
     """
     Calculate the mismatch for an array of start times.
 
@@ -1402,7 +1402,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
 
 
 def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, 
-                      spherical_modes=None, min_method='Nelder-Mead',delta=0):
+                      spherical_modes=None, min_method='Nelder-Mead',delta=0.0):
     r"""
     Find the Mf and chif values that minimize the mismatch for a given
     ringdown start time and model, and from this calculate the 'distance' of 
