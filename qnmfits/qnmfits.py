@@ -1169,7 +1169,7 @@ def plot_mode_amplitudes(coefficients, labels, log=False, outfile=None,
 
 
 def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq', 
-                      T_array=100, spherical_modes=None):
+                      T_array=100, spherical_modes=None, delta=0):
     """
     Calculate the mismatch for an array of start times.
 
@@ -1232,6 +1232,12 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq',
         the analysis should be performed on. If None, all the modes contained 
         in data_dict are used. The default is None.
 
+    delta : float or array_like, optional
+        Modify the frequencies used in the ringdown fit. Either a
+        constant value to modify every overtone frequency identically, or 
+        an array with different values for each overtone.  Default is 0 
+        (no modification). Only used if not using multimode_ringdown_fit.
+
     Returns
     -------
     mm_list : ndarray
@@ -1259,7 +1265,7 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq',
         else:
             for t0, T in zip(t0_array, T_array):
                 best_fit = ringdown_fit(
-                    times, data, modes, Mf, chif, t0, t0_method, T)
+                    times, data, modes, Mf, chif, t0, t0_method, T,delta)
                 mm_list.append(best_fit['mismatch'])
                 
     # Fits with a dynamic Kerr spectrum
@@ -1284,7 +1290,7 @@ def mismatch_t0_array(times, data, modes, Mf, chif, t0_array, t0_method='geq',
 
 
 def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0, 
-                        t0_method='geq', T=100, res=50, spherical_modes=None):
+                        t0_method='geq', T=100, res=50, spherical_modes=None, delta =0):
     """
     Calculate the mismatch for a grid of Mf and chif values.
 
@@ -1347,6 +1353,12 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
         A sequence of (l,m) tuples to specify which spherical-harmonic modes 
         the analysis should be performed on. If None, all the modes contained 
         in data_dict are used. The default is None.
+
+    delta : float or array_like (optional)
+        Modify the frequencies used in the ringdown fit. Either a
+        constant value to modify every overtone frequency identically, or 
+        an array with different values for each overtone.  Default is 0 
+        (no modification). Only used if using ringdown_fit for data.
         
     Returns
     -------
@@ -1380,7 +1392,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
             chif = chif_array[i%len(chif_array)]
         
             best_fit = ringdown_fit(
-                times, data, modes, Mf, chif, t0, t0_method, T)
+                times, data, modes, Mf, chif, t0, t0_method, T ,delta)
             mm_list.append(best_fit['mismatch'])
 
     # Convert the list of mismatches to a grid
@@ -1390,7 +1402,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
 
 
 def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100, 
-                      spherical_modes=None, min_method='Nelder-Mead'):
+                      spherical_modes=None, min_method='Nelder-Mead',delta=0):
     r"""
     Find the Mf and chif values that minimize the mismatch for a given
     ringdown start time and model, and from this calculate the 'distance' of 
@@ -1460,6 +1472,12 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
         includes None, in which case the method is automatically chosen. The
         default is 'Nelder-Mead'.
 
+    delta : float or array_like (optional)
+        Modify the frequencies used in the ringdown fit. Either a
+        constant value to modify every overtone frequency identically, or 
+        an array with different values for each overtone.  Default is 0 
+        (no modification). Only used if using ringdown_fit.
+
     Returns
     -------
     epsilon : float
@@ -1520,7 +1538,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
         
     else:
         
-        def mismatch_M_chi(x, times, data_dict, modes, t0, t0_method, T):
+        def mismatch_M_chi(x, times, data_dict, modes, t0, t0_method, T,delta):
             """
             A wrapper for the ringdown_fit function, for use with the SciPy 
             minimize function.
@@ -1534,7 +1552,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
                 chif = 0
             
             best_fit = ringdown_fit(
-                times, data_dict, modes, Mf, chif, t0, t0_method, T)
+                times, data_dict, modes, Mf, chif, t0, t0_method, T,delta)
             
             return best_fit['mismatch']
         
