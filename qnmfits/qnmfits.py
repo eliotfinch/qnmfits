@@ -1646,7 +1646,7 @@ def plot_mismatch_M_chi_grid(mm_grid, Mf_minmax, chif_minmax, truth=None,
         
     if marker is not None:
         # Mark a particular mass-spin combination
-        ax.plot(marker[1],marker[0] marker='o', markersize=3, color='k')
+        ax.plot(marker[1],marker[0], marker='o', markersize=3, color='k')
 
     # Color bar
     divider = make_axes_locatable(ax)
