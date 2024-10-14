@@ -117,7 +117,7 @@ class qnm:
                 (real_omega_interp, imag_omega_interp), mu_interp
                 ]
         
-    def _interpolate(self, l, m, n):
+    def _interpolate(self, l, m, n, s=-2):
 
         # If there is a known multiplet with the same l and m, we need to
         # be careful with the n index
@@ -127,7 +127,7 @@ class qnm:
                 if n > nprime+1:
                     n_load -= 1
 
-        qnm_func = qnm_loader.modes_cache(-2, l, m, n_load)
+        qnm_func = qnm_loader.modes_cache(s, l, m, n_load)
         
         # Extract relevant quantities
         spins = qnm_func.a
@@ -151,11 +151,11 @@ class qnm:
             mu_interp.append((real_mu_interp, imag_mu_interp))
 
         # Add these interpolated functions to the frequency_funcs dictionary
-        self._interpolated_qnm_funcs[l,m,n] = [
+        self._interpolated_qnm_funcs[l,m,n,s] = [
             (real_omega_interp, imag_omega_interp), mu_interp
             ]
         
-    def omega(self, l, m, n, sign, chif, Mf=1):
+    def omega(self, l, m, n, sign, chif, Mf=1, s=-2):
         """
         Return a complex frequency, :math:`\omega_{\ell m n}(M_f, \chi_f)`,
         for a particular mass, spin, and mode. One or both of chif and Mf can
@@ -215,10 +215,10 @@ class qnm:
         # Test if the interpolated qnm function has been created (we create 
         # our own interpolant so that we can evaluate the frequencies for 
         # all spins simultaneously)
-        if (l,m,n) not in self._interpolated_qnm_funcs:
-            self._interpolate(l,m,n)
+        if (l,m,n,s) not in self._interpolated_qnm_funcs:
+            self._interpolate(l,m,n,s)
             
-        omega_interp = self._interpolated_qnm_funcs[l,m,n][0]
+        omega_interp = self._interpolated_qnm_funcs[l,m,n,s][0]
         omega = omega_interp[0](chif) + 1j*omega_interp[1](chif)
             
         # Use symmetry properties to get the mirror mode, if requested
@@ -227,7 +227,7 @@ class qnm:
         
         return omega/Mf
     
-    def omega_list(self, modes, chif, Mf=1):
+    def omega_list(self, modes, chif, Mf=1, s=-2):
         """
         Return a frequency list, containing frequencies corresponding to each
         mode in the modes list (for a given mass and spin).
@@ -259,7 +259,7 @@ class qnm:
         
         # Code for nonlinear QNMs:
         return [
-            sum([self.omega(l, m, n, sign, chif, Mf) 
+            sum([self.omega(l, m, n, sign, chif, Mf, s) 
                  for l, m, n, sign in [mode[i:i+4] for i in range(0, len(mode), 4)]
                  ]) 
             for mode in modes
@@ -276,7 +276,7 @@ class qnm:
         #     return_list.append(sum(sum_list))
         # return return_list
         
-    def mu(self, l, m, lp, mp, nprime, sign, chif):
+    def mu(self, l, m, lp, mp, nprime, sign, chif, s=-2):
         """
         Return a spherical-spheroidal mixing coefficient, 
         :math:`\mu_{\ell m \ell' m' n'}(\chi_f)`, for a particular spin and 
@@ -325,15 +325,15 @@ class qnm:
         
         # Our functions return all mixing coefficients with the given 
         # (l',m',n'), so we need to index it to get the requested l
-        if abs(m) > 2:
+        if abs(m) > abs(s):
             index = l - abs(m)
         else:
-            index = l - 2
+            index = l - abs(s)
             
-        if (lp,mp,nprime) not in self._interpolated_qnm_funcs:
-            self._interpolate(lp,mp,nprime)
+        if (lp,mp,nprime,s) not in self._interpolated_qnm_funcs:
+            self._interpolate(lp,mp,nprime,s)
             
-        mu_interp = self._interpolated_qnm_funcs[lp,mp,nprime][1][index]
+        mu_interp = self._interpolated_qnm_funcs[lp,mp,nprime,s][1][index]
         mu = mu_interp[0](chif) + 1j*mu_interp[1](chif)
             
         # Use symmetry properties to get the mirror mixing coefficient, if 
@@ -343,7 +343,7 @@ class qnm:
             
         return mu
         
-    def mu_list(self, indices, chif):
+    def mu_list(self, indices, chif, s=-2):
         """
         Return a list of mixing coefficients, for all requested indices. See
         the qnm.mu() docstring for more details.
@@ -368,7 +368,7 @@ class qnm:
         # For each mode, call the qnm function and append the result to the 
         # list
         for l, m, lp, mp, nprime, sign in indices:
-            mus.append(self.mu(l, m, lp, mp, nprime, sign, chif))
+            mus.append(self.mu(l, m, lp, mp, nprime, sign, chif, s))
         
         return mus
     
