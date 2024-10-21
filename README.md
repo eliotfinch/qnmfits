@@ -19,6 +19,8 @@ If using `conda`, I recommend installing all dependencies via `conda` first, and
 
 The core of the package is the [`qnmfits.py`](qnmfits/qnmfits.py) file; this contains a collection of functions for performing ringdown analyses on any supplied waveform. For an overview of the available functions, see the [package tutorial notebook](examples/package_tutorial.ipynb).
 
+Additional functions for performing spatial mapping of linear and quadratic QNMs are available in [`spatial_mapping_functions.py`](qnmfits/spatial_mapping_functions.py). See [this repository](https://github.com/Richardvnd/spatial_mapping) for example usage. See also Dyer & Moore ([arxiv:2410.13935](https://arxiv.org/abs/2410.13935)) for further details.
+
 Often you will want to work with SXS waveforms. For this we provide a [`SXS` helper class](qnmfits/Waveforms/Simulation.py#L12) (also demonstrated in the package tutorial) to load and manipulate waveforms (see the functions in [`Base.py`](qnmfits/Waveforms/Base.py) to see what manipulations are available). You can, of course, load the SXS waveform data by other means and then pass it to the functions in `qnmfits.py`. Similar to the `SXS` class, there are classes for loading [NRSur7dq4](qnmfits/Waveforms/Surrogate.py#L7) and [NRHybSur3dq8](qnmfits/Waveforms/Surrogate.py#L201) surrogate waveforms (note that these are less well-tested).
 
 ## A note on QNM labelling
