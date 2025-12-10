@@ -63,13 +63,13 @@ class qnm:
         # convention
         multiplet_data = {}
 
-        # A list of known multiplets
-        self.multiplet_list = [(2, 0, 8), (2, 1, 8), (2, 2, 8)]
+        # A list of known multiplets, (ell, m, n, s)
+        self.multiplet_list = [(2, 0, 8, -2), (2, 1, 8, -2), (2, 2, 8, -2)]
 
         # Keep track of what data has been downloaded (useful for warnings)
         self.download_check = {}
 
-        for ell, m, n in self.multiplet_list:
+        for ell, m, n, s in self.multiplet_list:
 
             file_path = data_dir / f'KerrQNM_{n:02}.h5'
             self.download_check[n] = file_path.exists()
@@ -82,7 +82,7 @@ class qnm:
                     # multiplet_data dictionary with the preferred labelling
                     # convention
                     for i in [0, 1]:
-                        multiplet_data[(ell, m, n+i)] = np.array(
+                        multiplet_data[(ell, m, n+i, s)] = np.array(
                             f[f'n{n:02}/m{m:+03}/{{{ell},{m},{{{n},{i}}}}}']
                             )
 
@@ -126,7 +126,7 @@ class qnm:
         # If there is a known multiplet with the same l and m, we need to
         # be careful with the n index
         n_load = n
-        for ellp, mp, nprime in self.multiplet_list:
+        for ellp, mp, nprime, sp in self.multiplet_list:
             if (ell == ellp) & (m == mp):
                 if n > nprime+1:
                     n_load -= 1
