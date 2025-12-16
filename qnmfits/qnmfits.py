@@ -140,7 +140,7 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
 
 
 def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
-                 delta=0.0):
+                 delta=0.0, include_constant=False):
     """
     Perform a least-squares fit to some data using a ringdown model.
 
@@ -198,6 +198,10 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
         constant value to modify every overtone frequency identically, or
         an array with different values for each overtone.  Default is 0
         (no modification).
+
+    include_constant : bool, optional
+        Whether to include a constant (zero-frequency) term in the fit. The 
+        default is False.
 
     Returns
     -------
@@ -272,6 +276,10 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
 
     # Multiply frequencies by delta_factor = delta + 1
     frequencies = delta_factor*np.array(qnm.omega_list(modes, chif, Mf))
+
+    if include_constant:
+        frequencies = np.append(frequencies, 0.0)
+        modes = modes + [('constant',)]
 
     # Construct coefficient matrix and solve
     # --------------------------------------
