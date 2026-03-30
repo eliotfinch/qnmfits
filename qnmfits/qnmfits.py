@@ -150,7 +150,7 @@ def multimode_mismatch(times, wf_dict_1, wf_dict_2):
 
 
 def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
-                 delta=0.0, include_constant=False):
+                 delta_r=0.0, delta_i=0.0, include_constant=False):
     """
     Perform a least-squares fit to some data using a ringdown model.
 
@@ -203,11 +203,11 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
         The duration of the data to analyse, such that the end time is t0 + T.
         The default is 100.
 
-    delta : float or array_like (optional)
-        Modify the frequencies used in the ringdown fit. Either a
-        constant value to modify every overtone frequency identically, or
-        an array with different values for each overtone.  Default is 0
-        (no modification).
+    delta_r, delta_i : float or array_like (optional)
+        Modify the real and imaginary parts of the frequencies used in the
+        ringdown fit. Either a constant value to modify every frequency
+        identically, or an array with different values for each mode. Default
+        is 0 (no modification).
 
     include_constant : bool, optional
         Whether to include a constant (zero-frequency) term in the fit. The
@@ -267,25 +267,21 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
     # Checking input for delta
 
     # If delta is list of appropriate length, convert it to np.array
-    if type(delta) is int:
-        delta = float(delta)
+    if type(delta_r) is list and len(delta_r) == len(modes):
+        delta_r = np.array(delta_r)
 
-    if type(delta) is list and len(delta) == len(modes):
-        delta = np.array(delta)
-        delta_factor = delta + 1
+    if type(delta_i) is list and len(delta_i) == len(modes):
+        delta_i = np.array(delta_i)
 
-    # If delta is a float or array of appropriate length, sets delta factor
-    if (
-        (isinstance(delta, np.ndarray) and len(delta) == len(modes))
-        or type(delta) is float
-    ):
-        delta_factor = delta + 1
+    delta_r_factor = 1 + delta_r
+    delta_i_factor = 1 + delta_i
 
-    else:
-        print("delta must be a float or an array with length len(modes)")
+    frequencies = np.array(qnm.omega_list(modes, chif, Mf))
 
     # Multiply frequencies by delta_factor = delta + 1
-    frequencies = delta_factor*np.array(qnm.omega_list(modes, chif, Mf))
+    frequencies_r = delta_r_factor*np.real(frequencies)
+    frequencies_i = delta_i_factor*np.imag(frequencies)
+    frequencies = frequencies_r + 1j*frequencies_i
 
     if include_constant:
         frequencies = np.append(frequencies, 0.0)
@@ -1447,7 +1443,7 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
 
 def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
                       T=100, spherical_modes=None, min_method='Nelder-Mead',
-                      delta=0.0, x0=None):
+                      delta_r=0.0, delta_i=0.0, x0=None):
     r"""
     Find the Mf and chif values that minimize the mismatch for a given
     ringdown start time and model, and from this calculate the 'distance' of
@@ -1517,11 +1513,11 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
         includes None, in which case the method is automatically chosen. The
         default is 'Nelder-Mead'.
 
-    delta : float or array_like (optional)
-        Modify the frequencies used in the ringdown fit. Either a
-        constant value to modify every overtone frequency identically, or
-        an array with different values for each overtone.  Default is 0
-        (no modification). Only used if using ringdown_fit.
+    delta_r, delta_i : float or array_like, optional
+        Modify the real and imaginary parts of the frequencies used in the
+        ringdown fit. Either a constant value to modify every frequency
+        identically, or an array with different values for each mode. 
+        Default is 0 (no modification). Only used if using ringdown_fit.
 
     Returns
     -------
@@ -1585,7 +1581,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
     else:
 
         def mismatch_M_chi(
-                x, times, data_dict, modes, t0, t0_method, T, delta
+                x, times, data_dict, modes, t0, t0_method, T, delta_r, delta_i
         ):
             """
             A wrapper for the ringdown_fit function, for use with the SciPy
@@ -1600,7 +1596,17 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
                 chif = 0
 
             best_fit = ringdown_fit(
-                times, data_dict, modes, Mf, chif, t0, t0_method, T, delta)
+                times,
+                data_dict,
+                modes,
+                Mf,
+                chif,
+                t0,
+                t0_method,
+                T,
+                delta_r,
+                delta_i
+            )
 
             return best_fit['mismatch']
 
@@ -1608,7 +1614,7 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
         res = minimize(
             mismatch_M_chi,
             x0,
-            args=(times, data, modes, t0, t0_method, T, delta),
+            args=(times, data, modes, t0, t0_method, T, delta_r, delta_i),
             method=min_method,
             bounds=bounds,
             options=options
