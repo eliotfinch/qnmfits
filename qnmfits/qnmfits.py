@@ -329,6 +329,178 @@ def ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq', T=100,
     return best_fit
 
 
+def ringdown_fit_alt(times, data, frequencies, t0, t0_method='geq', T=100,
+                     delta_r=0.0, delta_i=0.0, include_constant=False):
+    """
+    Perform a least-squares fit to some data using a ringdown model.
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be fitted.
+
+    data : array_like
+        The data to be fitted by the ringdown model.
+
+    modes : array_like
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in
+        the ringdown model. For regular (positive real part) modes use
+        sign=+1. For mirror (negative real part) modes use sign=-1. For
+        nonlinear modes, the tuple has the form
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
+
+    Mf : float
+        The remnant black hole mass, which along with chif determines the QNM
+        frequencies.
+
+    chif : float
+        The magnitude of the remnant black hole spin.
+
+    t0 : float
+        The start time of the ringdown model.
+
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+
+        Options are:
+
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0,
+                and take times from there.
+
+        The default is 'geq'.
+
+    T : float, optional
+        The duration of the data to analyse, such that the end time is t0 + T.
+        The default is 100.
+
+    delta_r, delta_i : float or array_like (optional)
+        Modify the real and imaginary parts of the frequencies used in the
+        ringdown fit. Either a constant value to modify every frequency
+        identically, or an array with different values for each mode. Default
+        is 0 (no modification).
+
+    include_constant : bool, optional
+        Whether to include a constant (zero-frequency) term in the fit. The
+        default is False.
+
+    Returns
+    -------
+    best_fit : dict
+        A dictionary of useful information related to the fit. Keys include:
+
+            - 'residual' : float
+                The residual from the fit.
+            - 'mismatch' : float
+                The mismatch between the best-fit waveform and the data.
+            - 'C' : ndarray
+                The best-fit complex amplitudes. There is a complex amplitude
+                for each ringdown mode.
+            - 'data' : ndarray
+                The (masked) data used in the fit.
+            - 'model': ndarray
+                The best-fit model waveform.
+            - 'model_times' : ndarray
+                The times at which the model is evaluated.
+            - 't0' : float
+                The ringdown start time used in the fit.
+            - 'modes' : ndarray
+                The ringdown modes used in the fit.
+            - 'mode_labels' : list
+                Labels for each of the ringdown modes (used for plotting).
+            - 'frequencies' : ndarray
+                The values of the complex frequencies for all the ringdown
+                modes.
+    """
+    # Mask the data with the requested method
+    if t0_method == 'geq':
+
+        data_mask = (times >= t0) & (times < t0 + T)
+
+        times_masked = times[data_mask]
+        data_masked = data[data_mask]
+
+    elif t0_method == 'closest':
+
+        start_index = np.argmin((times-t0)**2)
+        end_index = np.argmin((times-t0-T)**2)
+
+        times_masked = times[start_index:end_index]
+        data_masked = data[start_index:end_index]
+
+    else:
+        print("""Requested t0_method is not valid. Please choose between 'geq'
+              and 'closest'""")
+
+    # Frequencies
+    # -----------
+
+    # Checking input for delta
+
+    # If delta is list of appropriate length, convert it to np.array
+    if type(delta_r) is list and len(delta_r) == len(frequencies):
+        delta_r = np.array(delta_r)
+
+    if type(delta_i) is list and len(delta_i) == len(frequencies):
+        delta_i = np.array(delta_i)
+
+    delta_r_factor = 1 + delta_r
+    delta_i_factor = 1 + delta_i
+
+    # Multiply frequencies by delta_factor = delta + 1
+    frequencies_r = delta_r_factor*np.real(frequencies)
+    frequencies_i = delta_i_factor*np.imag(frequencies)
+    frequencies = frequencies_r + 1j*frequencies_i
+
+    if include_constant:
+        frequencies = np.append(frequencies, 0.0)
+
+    # Construct coefficient matrix and solve
+    # --------------------------------------
+
+    # Construct the coefficient matrix
+    a = np.array([
+        np.exp(-1j*frequencies[i]*(times_masked-t0))
+        for i in range(len(frequencies))
+        ]).T
+
+    # Solve for the complex amplitudes, C. Also returns the sum of residuals,
+    # the rank of a, and singular values of a.
+    C, res, rank, s = np.linalg.lstsq(a, data_masked, rcond=None)
+
+    # Evaluate the model
+    model = np.einsum('ij,j->i', a, C)
+
+    # Calculate the mismatch for the fit
+    mm = mismatch(times_masked, model, data_masked)
+
+    # Store all useful information to a output dictionary
+    best_fit = {
+        'residual': res,
+        'rank': rank,
+        's': s,
+        'mismatch': mm,
+        'C': C,
+        'data': data_masked,
+        'model': model,
+        'model_times': times_masked,
+        't0': t0,
+        'frequencies': frequencies
+        }
+
+    # Return the output dictionary
+    return best_fit
+
+
 def dynamic_ringdown_fit(times, data, modes, Mf, chif, t0, t0_method='geq',
                          T=100):
     """
@@ -1441,6 +1613,40 @@ def mismatch_M_chi_grid(times, data, modes, Mf_minmax, chif_minmax, t0,
     return mm_grid
 
 
+def mismatch_M_chi_grid_alt(times, data, modes, Mf_minmax, chif_minmax, t0,
+                            t0_method='geq', T=100, res=50, fixed_frequencies=None,
+                            delta_r=0.0, delta_i=0.0):
+    
+    # Create the mass and spin arrays
+    Mf_array = np.linspace(Mf_minmax[0], Mf_minmax[1], res)
+    chif_array = np.linspace(chif_minmax[0], chif_minmax[1], res)
+
+    # List to store the mismatch from each choice of M and chi
+    mm_list = []
+
+    # Cycle through each combination of mass and spin, calculating the
+    # mismatch for each. Use a single loop for the progress bar.
+
+    for i in tqdm(range(len(Mf_array)*len(chif_array))):
+
+        Mf = Mf_array[int(i/len(Mf_array))]
+        chif = chif_array[i % len(chif_array)]
+
+        free_frequencies = qnm.omega_list(modes, chif, Mf)
+
+        frequencies = free_frequencies + fixed_frequencies
+
+        best_fit = ringdown_fit_alt(
+            times, data, frequencies, t0, t0_method, T, delta_r, delta_i
+        )
+        mm_list.append(best_fit['mismatch'])
+
+    # Convert the list of mismatches to a grid
+    mm_grid = np.reshape(np.array(mm_list), (len(Mf_array), len(chif_array)))
+
+    return mm_grid
+
+
 def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
                       T=100, spherical_modes=None, min_method='Nelder-Mead',
                       delta_r=0.0, delta_i=0.0, x0=None):
@@ -1619,6 +1825,171 @@ def calculate_epsilon(times, data, modes, Mf, chif, t0, t0_method='geq',
             bounds=bounds,
             options=options
             )
+
+    # The remnant properties that give the minimum mismatch
+    Mf_bestfit = res.x[0]
+    chif_bestfit = res.x[1]
+
+    # Calculate epsilon
+    delta_Mf = Mf_bestfit - Mf
+    delta_chif = chif_bestfit - chif
+    epsilon = np.sqrt(delta_Mf**2 + delta_chif**2)
+
+    return epsilon, Mf_bestfit, chif_bestfit
+
+
+def calculate_epsilon_alt(times, data, free_modes, Mf, chif, t0, t0_method='geq',
+                          T=100, min_method='Nelder-Mead',
+                          fixed_modes=None, delta_r=0.0, delta_i=0.0, x0=None):
+    r"""
+    Find the Mf and chif values that minimize the mismatch for a given
+    ringdown start time and model, and from this calculate the 'distance' of
+    the best fit mass and spin values from the true remnant properties
+    (expressed through epsilon).
+
+    Parameters
+    ----------
+    times : array_like
+        The times associated with the data to be fitted.
+
+    data_dict : array_like or dict
+        The data to be fitted by the ringdown model. If a dict of
+        spherical-harmonic modes, use the spherical_modes argument to specify
+        which modes to include in the fit.
+
+    modes : array_like
+        A sequence of (l,m,n,sign) tuples to specify which QNMs to include in
+        the ringdown model. For regular (positive real part) modes use
+        sign=+1. For mirror (negative real part) modes use sign=-1. For
+        nonlinear modes, the tuple has the form
+        (l1,m1,n1,sign1,l2,m2,n2,sign2,...).
+
+    Mf : float
+        The remnant black hole mass. Along with calculating epsilon, this is
+        used for the initial guess in the minimization.
+
+    chif : float
+        The magnitude of the remnant black hole spin. Along with calculating
+        epsilon, this is used for the initial guess in the minimization.
+
+    t0 : float
+        The start time of the ringdown model.
+
+    t0_method : str, optional
+        A requested ringdown start time will in general lie between times on
+        the default time array (the same is true for the end time of the
+        analysis). There are different approaches to deal with this, which can
+        be specified here.
+
+        Options are:
+
+            - 'geq'
+                Take data at times greater than or equal to t0. Note that
+                we still treat the ringdown start time as occuring at t0,
+                so the best fit coefficients are defined with respect to
+                t0.
+
+            - 'closest'
+                Identify the data point occuring at a time closest to t0,
+                and take times from there.
+
+        The default is 'geq'.
+
+    T : float, optional
+        The duration of the data to analyse, such that the end time is t0 + T.
+        The default is 100.
+
+    spherical_modes : array_like, optional
+        A sequence of (l,m) tuples to specify which spherical-harmonic modes
+        the analysis should be performed on. If None, all the modes contained
+        in data_dict are used. The default is None.
+
+    min_method : str, optional
+        The method used to find the mismatch minimum in the mass-spin space.
+        This can be any method available to scipy.optimize.minimize. This
+        includes None, in which case the method is automatically chosen. The
+        default is 'Nelder-Mead'.
+
+    delta_r, delta_i : float or array_like, optional
+        Modify the real and imaginary parts of the frequencies used in the
+        ringdown fit. Either a constant value to modify every frequency
+        identically, or an array with different values for each mode. 
+        Default is 0 (no modification). Only used if using ringdown_fit.
+
+    Returns
+    -------
+    epsilon : float
+        The difference between the true Mf and chif values and values that
+        minimize the mismatch. Defined as
+
+        .. math::
+            \epsilon = \sqrt{ \left( \delta M_f \right)^2 +
+                              \left( \delta\chi_f \right)^2 }.
+
+        where :math:`\delta M_f = M_\mathrm{best fit} - M_f` and
+        :math:`\delta \chi_f = \chi_\mathrm{best fit} - \chi_f`
+
+    Mf_bestfit: float
+        The remnant mass that minimizes the mismatch.
+
+    chif_bestfit : float
+        The remnant spin that minimizes the mismatch.
+    """
+    # The initial guess in the minimization
+    if x0 is None:
+        x0 = [Mf, chif]
+
+    # Other settings for the minimzation
+    bounds = [(0, 2.0), (0, 0.99)]
+    options = {'xatol': 1e-6, 'disp': False}
+
+    if fixed_modes is not None:
+        fixed_frequencies = qnm.omega_list(fixed_modes, chif, Mf)
+    else:
+        fixed_frequencies = []
+
+    def mismatch_M_chi(
+            x, times, data, modes, t0, t0_method, T, fixed_frequencies,
+            delta_r, delta_i
+    ):
+        """
+        A wrapper for the ringdown_fit function, for use with the SciPy
+        minimize function.
+        """
+        Mf = x[0]
+        chif = x[1]
+
+        if chif > 0.99:
+            chif = 0.99
+        if chif < 0:
+            chif = 0
+
+        free_frequencies = qnm.omega_list(modes, chif, Mf)
+
+        frequencies = free_frequencies + fixed_frequencies
+
+        best_fit = ringdown_fit_alt(
+            times,
+            data,
+            frequencies,
+            t0,
+            t0_method,
+            T,
+            delta_r,
+            delta_i
+        )
+
+        return best_fit['mismatch']
+
+    # Perform the SciPy minimization
+    res = minimize(
+        mismatch_M_chi,
+        x0,
+        args=(times, data, free_modes, t0, t0_method, T, fixed_frequencies, delta_r, delta_i),
+        method=min_method,
+        bounds=bounds,
+        options=options
+        )
 
     # The remnant properties that give the minimum mismatch
     Mf_bestfit = res.x[0]
